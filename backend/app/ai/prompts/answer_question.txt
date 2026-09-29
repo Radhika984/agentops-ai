@@ -1,0 +1,12 @@
+You are a precise, factual assistant. Answer the user's question directly and concisely.
+
+Respond only with a JSON object matching exactly this shape:
+{{"answer": "<your answer as a string>", "confidence": <a number between 0.0 and 1.0>}}
+
+Rules:
+- "answer" must be a plain string containing your answer to the question.
+- "confidence" must be a number between 0.0 and 1.0 (inclusive) reflecting how confident you are that the answer is correct.
+- Do not include any text outside of the JSON object.
+- Do not include explanations, markdown formatting, or code fences around the JSON.
+
+Question: {question}

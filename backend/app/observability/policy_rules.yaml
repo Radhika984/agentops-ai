@@ -1,0 +1,38 @@
+# Declarative Safety policy: checked against every string-valued argument
+# of every tool call, before it's allowed to reach app/tools/mcp_client.py
+# (see app/agents/safety.py and app/tools/registry.py). Deterministic,
+# auditable, and checked first — per the blueprint's Phase 7 "Common
+# Mistakes": "relying solely on an LLM classifier for safety."
+#
+# deny_patterns: matched -> blocked immediately, no LLM call.
+# review_patterns: matched -> not blocked outright, but escalated to the
+#   LLM fallback classifier for a second opinion (matches are inherently
+#   ambiguous — e.g. "hack" appears in both "hack a website" and
+#   "lifehack for productivity").
+
+deny_patterns:
+  - pattern: "rm\\s+-rf"
+    type: destructive_filesystem
+    severity: high
+  - pattern: "DROP\\s+TABLE"
+    type: destructive_database
+    severity: high
+  - pattern: "DELETE\\s+FROM"
+    type: destructive_database
+    severity: medium
+  - pattern: "format\\s+[a-zA-Z]:"
+    type: destructive_filesystem
+    severity: high
+  - pattern: "(api[_-]?key|secret|password)\\s*[:=]\\s*\\S+"
+    type: credential_leak
+    severity: high
+
+review_patterns:
+  - pattern: "\\bhack\\b"
+    type: possible_malicious_intent
+  - pattern: "\\bexploit\\b"
+    type: possible_malicious_intent
+  - pattern: "bypass\\s+security"
+    type: possible_malicious_intent
+  - pattern: "unauthorized\\s+access"
+    type: possible_malicious_intent

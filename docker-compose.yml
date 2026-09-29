@@ -1,0 +1,91 @@
+services:
+  postgres:
+    # pgvector/pgvector:pg16, not plain postgres:16-alpine: Phase 6 needs the
+    # pgvector extension available at the server level (CREATE EXTENSION
+    # alone isn't enough — the extension's files must already be installed
+    # in the image). This is the official, free, open-source pgvector image
+    # — a drop-in replacement built on top of postgres:16.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: agentops
+      POSTGRES_PASSWORD: agentops
+      POSTGRES_DB: agentops_dev
+    ports:
+      # Host port 5434, not 5432: this machine already has other, unrelated
+      # projects' Postgres containers bound to 5432/5433 on the host. Inside
+      # the Docker network this service is still reachable at
+      # "postgres:5432" (see the backend service's DATABASE_URL override
+      # below), so this only affects connecting from the host.
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentops -d agentops_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    # Phase 8 response cache (app/ai/cache.py). Official, free,
+    # open-source image — no billing.
+    image: redis:7-alpine
+    ports:
+      # Host port 6380, not 6379 — see .env.example's REDIS_URL comment.
+      # Inside the Docker network this service is still reachable at
+      # "redis:6379" (see the backend service's REDIS_URL override below).
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - .env
+    environment:
+      # .env's DATABASE_URL points at "localhost", which is correct for
+      # running the backend directly on the host but not inside the Docker
+      # network — here Postgres is reachable at the service name "postgres".
+      # (See Phase 0 blueprint "Common Mistakes".)
+      DATABASE_URL: postgresql+asyncpg://agentops:agentops@postgres:5432/agentops_dev
+      # Same reasoning — Redis is reachable at the service name "redis"
+      # inside the Docker network, not "localhost".
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # --no-dev: `uv run` re-syncs the environment before every start: without
+    # this it would install mypy/ruff/pytest (the dev dependency group) into
+    # the running container, which is unnecessary and slows startup.
+    command: uv run --no-dev --frozen uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      # Consumed by the browser (client-side fetch), not by another
+      # container, so this must be the host-published port, not the
+      # in-network service name.
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+      - frontend_next:/app/.next
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  frontend_node_modules:
+  frontend_next:

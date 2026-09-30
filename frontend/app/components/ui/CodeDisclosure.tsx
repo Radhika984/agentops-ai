@@ -8,7 +8,7 @@ export function CodeBlock({ value, className = "" }: { value: unknown; className
   const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
   return (
     <pre
-      className={`overflow-x-auto rounded bg-surface-2 px-2 py-1.5 font-mono text-[11px] whitespace-pre-wrap text-ink-2 ${className}`}
+      className={`text-data overflow-x-auto rounded bg-surface-2 px-2 py-1.5 font-mono whitespace-pre-wrap ${className}`}
     >
       {text}
     </pre>
@@ -20,7 +20,7 @@ export function CodeBlock({ value, className = "" }: { value: unknown; className
 export function LabeledCodeBlock({ label, value }: { label: string; value: unknown }) {
   return (
     <div>
-      <p className="font-semibold tracking-wide text-ink-3 uppercase">{label}</p>
+      <p className="text-section-title">{label}</p>
       <CodeBlock value={value} className="mt-1" />
     </div>
   );

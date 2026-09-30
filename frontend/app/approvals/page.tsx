@@ -4,14 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/AppShell";
-import { Badge, type Tone } from "../components/ui/Badge";
+import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { LabeledCodeBlock } from "../components/ui/CodeDisclosure";
 import { EmptyState } from "../components/ui/EmptyState";
+import { FlowSteps, type FlowStep } from "../components/ui/FlowSteps";
 import { TextInput } from "../components/ui/Input";
+import { PageHeader } from "../components/ui/PageHeader";
 import { Skeleton } from "../components/ui/Skeleton";
-import { StatusDot } from "../components/ui/Status";
 import { ApprovalsIcon, CheckIcon, CloseIcon } from "../components/ui/icons";
 import {
   ApiError,
@@ -46,10 +47,13 @@ function formatValue(value: unknown): string {
   return value === undefined ? "—" : JSON.stringify(value, null, 2);
 }
 
-interface FlowStep {
-  label: string;
-  tone: Tone;
-  pulse?: boolean;
+/** The real originator of a proposal — never a fabricated "requester"
+ * field (ApprovalRead has none; both node types are system-raised, not
+ * submitted by a person). AutoFix is explicitly AI-generated; a
+ * release_decision is the deterministic release-gate pipeline itself —
+ * stated plainly rather than invented as if a person proposed it. */
+function proposedBy(node: string): string {
+  return node === "auto_fix" ? "AgentOps AutoFix (automatic)" : "Release Gate (automatic)";
 }
 
 /** "AI proposes, humans control" made visible as a real sequence, not
@@ -79,22 +83,6 @@ function approvalFlowSteps(approval: ApprovalRead, autofix: AutoFixApprovalPaylo
   return steps;
 }
 
-function ApprovalFlow({ steps }: { steps: FlowStep[] }) {
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {steps.map((step, i) => (
-        <span key={i} className="flex items-center gap-1.5">
-          {i > 0 && <span className="h-px w-3 bg-line-strong" aria-hidden="true" />}
-          <StatusDot tone={step.tone} pulse={step.pulse} />
-          <span className={`text-[11px] ${step.pulse ? "font-medium text-ink" : "text-ink-3"}`}>
-            {step.label}
-          </span>
-        </span>
-      ))}
-    </div>
-  );
-}
-
 function ApprovalRow({ approval }: { approval: ApprovalRead }) {
   const [reason, setReason] = useState("");
   const queryClient = useQueryClient();
@@ -122,9 +110,13 @@ function ApprovalRow({ approval }: { approval: ApprovalRead }) {
 
   const autofix = parseAutoFixPayload(approval);
   const flowSteps = approvalFlowSteps(approval, autofix);
+  const scope = autofix ? (AUTOFIX_OPTION_LABEL[autofix.action] ?? autofix.action) : NODE_LABEL[approval.node] ?? approval.node;
 
   return (
-    <Card elevation="raised" className="relative overflow-hidden transition-shadow duration-150">
+    <Card
+      elevation="raised"
+      className={`relative overflow-hidden transition-shadow duration-150 ${isPending ? "ring-1 ring-warning/25" : ""}`}
+    >
       <span
         className={`absolute top-0 left-0 h-full w-1 ${
           approval.status === "approved"
@@ -135,57 +127,75 @@ function ApprovalRow({ approval }: { approval: ApprovalRead }) {
         }`}
         aria-hidden="true"
       />
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="accent">{NODE_LABEL[approval.node] ?? approval.node}</Badge>
-            <span className="text-xs text-ink-3">{parentLabel}</span>
-          </div>
-          <div className="mt-1.5">
-            <ApprovalFlow steps={flowSteps} />
-          </div>
 
-          {autofix ? (
-            <div className="mt-2 flex flex-col gap-1.5 text-sm text-ink-2">
-              <p>
-                <span className="font-medium text-ink">
-                  {AUTOFIX_OPTION_LABEL[autofix.action] ?? autofix.action}
-                </span>
-                {autofix.field && (
-                  <>
-                    {" "}
-                    — field <code className="font-mono text-xs">{autofix.field}</code>
-                  </>
-                )}
-              </p>
-              <p className="whitespace-pre-wrap text-xs text-ink-3">{autofix.rationale}</p>
-              {(autofix.current_value !== undefined || autofix.proposed_value !== undefined) && (
-                <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
-                  <LabeledCodeBlock label="Current" value={formatValue(autofix.current_value)} />
-                  <LabeledCodeBlock label="Proposed" value={formatValue(autofix.proposed_value)} />
-                </div>
-              )}
-              {autofix.reverification && (
-                <p className="mt-1 rounded-md border border-line bg-surface-2 px-2.5 py-1.5 text-xs text-ink-2">
-                  Re-verification: new suite run{" "}
-                  <span className="font-mono">{autofix.reverification.suite_run_id.slice(0, 8)}</span> →{" "}
-                  {autofix.reverification.new_verdict ?? "no result"}
-                </p>
-              )}
-            </div>
-          ) : (
-            approval.reason && (
-              <p className="mt-2 max-w-xl whitespace-pre-wrap text-sm text-ink-2">{approval.reason}</p>
-            )
-          )}
-        </div>
-        <span className="whitespace-nowrap text-xs text-ink-3">
-          Requested {new Date(approval.requested_at).toLocaleString()}
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Badge tone="accent">{NODE_LABEL[approval.node] ?? approval.node}</Badge>
+        {isPending && (
+          <span className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-warning uppercase">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warning" aria-hidden="true" />
+            Awaiting your decision
+          </span>
+        )}
       </div>
 
+      <div className="mt-2">
+        <FlowSteps steps={flowSteps} />
+      </div>
+
+      {/* WHAT / WHY / WHO / WHEN — governance metadata, each explicitly
+          labeled rather than folded into one paragraph, so the reviewer
+          can scan a queue of these without reading full sentences. */}
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
+        <div>
+          <dt className="font-semibold tracking-wide text-ink-3 uppercase">What</dt>
+          <dd className="mt-0.5 text-ink-2">
+            {scope}
+            {autofix?.field && <span className="ml-1 font-mono text-[11px] text-ink-3">{autofix.field}</span>}
+          </dd>
+        </div>
+        <div>
+          <dt className="font-semibold tracking-wide text-ink-3 uppercase">Resource</dt>
+          <dd className="mt-0.5 font-mono text-[11px] text-ink-2">{parentLabel}</dd>
+        </div>
+        <div>
+          <dt className="font-semibold tracking-wide text-ink-3 uppercase">Proposed by</dt>
+          <dd className="mt-0.5 text-ink-2">{proposedBy(approval.node)}</dd>
+        </div>
+        <div>
+          <dt className="font-semibold tracking-wide text-ink-3 uppercase">When</dt>
+          <dd className="mt-0.5 text-ink-2">{new Date(approval.requested_at).toLocaleString()}</dd>
+        </div>
+      </dl>
+
+      {(autofix?.rationale || (!autofix && approval.reason)) && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Why</p>
+          <p className="mt-0.5 max-w-xl text-sm whitespace-pre-wrap text-ink-2">
+            {autofix ? autofix.rationale : approval.reason}
+          </p>
+        </div>
+      )}
+
+      {autofix && (autofix.current_value !== undefined || autofix.proposed_value !== undefined) && (
+        <div className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+          <LabeledCodeBlock label="Current" value={formatValue(autofix.current_value)} />
+          <LabeledCodeBlock label="Proposed" value={formatValue(autofix.proposed_value)} />
+        </div>
+      )}
+
+      {autofix?.reverification && (
+        <p className="mt-3 rounded-md border border-line bg-surface-2 px-2.5 py-1.5 text-xs text-ink-2">
+          Re-verification: new suite run{" "}
+          <span className="font-mono">{autofix.reverification.suite_run_id.slice(0, 8)}</span> →{" "}
+          {autofix.reverification.new_verdict ?? "no result"}
+        </p>
+      )}
+
+      {/* DECISION — the one governance action this whole card exists
+          for, given its own visually distinct zone instead of sitting
+          flush with the metadata above it. */}
       {isPending ? (
-        <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3 sm:flex-row sm:items-center">
+        <div className="mt-4 flex flex-col gap-2 rounded-md border border-line bg-surface-2 p-3 sm:flex-row sm:items-center">
           <TextInput
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -215,10 +225,14 @@ function ApprovalRow({ approval }: { approval: ApprovalRead }) {
         </div>
       ) : (
         (approval.decided_by || approval.decided_at) && (
-          <p className="mt-3 border-t border-line pt-3 text-xs text-ink-3">
-            Decided{approval.decided_by ? ` by ${approval.decided_by}` : ""}
-            {approval.decided_at ? ` · ${new Date(approval.decided_at).toLocaleString()}` : ""}
-          </p>
+          <div className="mt-4 border-t border-line pt-3">
+            <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Decision</p>
+            <p className="mt-0.5 text-xs text-ink-2">
+              {approval.status === "approved" ? "Approved" : "Rejected"}
+              {approval.decided_by ? ` by ${approval.decided_by}` : ""}
+              {approval.decided_at ? ` · ${new Date(approval.decided_at).toLocaleString()}` : ""}
+            </p>
+          </div>
         )
       )}
 
@@ -259,12 +273,10 @@ export default function ApprovalsPage() {
   return (
     <AppShell onLogout={handleLogout}>
       <div className="mx-auto w-full max-w-4xl px-4 py-7 md:px-8">
-        <h1 className="text-3xl font-bold tracking-tight text-ink">Release reviews</h1>
-        <p className="mt-1.5 max-w-2xl text-sm text-ink-2">
-          The engineering approval queue — Auto Fix patches and release-gate proposals, from both
-          legacy per-run releases and SuiteRun release reviews. Approve or reject a pending item
-          with an optional reason.
-        </p>
+        <PageHeader
+          title="Release reviews"
+          description="The engineering approval queue — Auto Fix patches and release-gate proposals, from both legacy per-run releases and SuiteRun release reviews. Approve or reject a pending item with an optional reason."
+        />
 
         <div className="mt-5 flex items-center gap-1 border-b border-line">
           {TABS.map((t) => (

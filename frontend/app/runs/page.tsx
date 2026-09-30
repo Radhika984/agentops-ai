@@ -9,6 +9,8 @@ import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Skeleton } from "../components/ui/Skeleton";
+import { StatusDot } from "../components/ui/Status";
+import { PageHeader } from "../components/ui/PageHeader";
 import { RunsIcon } from "../components/ui/icons";
 import { ApiError, clearToken, listAllSuiteRuns } from "../lib/api";
 import { useRequireAuth } from "../lib/useRequireAuth";
@@ -49,10 +51,7 @@ export default function AllRunsPage() {
   return (
     <AppShell onLogout={handleLogout}>
       <div className="animate-fade-in-up mx-auto w-full max-w-5xl px-4 py-7 md:px-8">
-        <h1 className="text-3xl font-bold tracking-tight text-ink">Runs</h1>
-        <p className="mt-1.5 text-sm text-ink-2">
-          Every suite run across your account, most recent first.
-        </p>
+        <PageHeader title="Runs" description="Every suite run across your account, most recent first." />
 
         <Card elevation="raised" padded={false} className="mt-7 overflow-hidden">
           {runsQuery.isLoading && (
@@ -84,12 +83,12 @@ export default function AllRunsPage() {
               <table className="w-full min-w-[700px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-line text-xs uppercase tracking-wide text-ink-3">
-                    <th className="px-5 py-2.5 font-medium">Project</th>
+                    <th className="px-5 py-2.5 font-medium">Verdict</th>
+                    <th className="px-3 py-2.5 font-medium">Project</th>
                     <th className="px-3 py-2.5 font-medium">Agent</th>
                     <th className="px-3 py-2.5 font-medium">Suite</th>
                     <th className="px-3 py-2.5 font-medium">Version</th>
                     <th className="px-3 py-2.5 font-medium">Status</th>
-                    <th className="px-3 py-2.5 font-medium">Verdict</th>
                     <th className="px-5 py-2.5 text-right font-medium">Completed</th>
                   </tr>
                 </thead>
@@ -97,17 +96,45 @@ export default function AllRunsPage() {
                   {runsQuery.data.items.map((run) => {
                     const total = run.pass_count + run.fail_count + run.inconclusive_count;
                     const verdict = run.verdict;
+                    // Verdict is the row's dominant, decision-relevant
+                    // signal — status is secondary execution-state
+                    // context — so verdict alone drives the row's
+                    // left-edge accent bar, letting a failed run register
+                    // before the eye reaches any badge text.
+                    const edgeTone = verdict ? VERDICT_TONE[verdict] : STATUS_TONE[run.status];
                     return (
                       <tr
                         key={run.id}
-                        className="cursor-pointer border-b border-line transition-colors duration-150 last:border-b-0 hover:bg-surface-2"
+                        className="relative cursor-pointer border-b border-line transition-colors duration-150 last:border-b-0 hover:bg-surface-2"
                         onClick={() =>
                           router.push(
                             `/agents/${run.agent_id}/test-suites/${run.suite_id}/runs/${run.id}`,
                           )
                         }
                       >
-                        <td className="max-w-[140px] truncate px-5 py-2.5 text-ink">
+                        <td className="px-5 py-2.5">
+                          <span
+                            className={`absolute top-0 left-0 h-full w-0.5 ${
+                              edgeTone === "danger"
+                                ? "bg-danger"
+                                : edgeTone === "warning"
+                                  ? "bg-warning"
+                                  : edgeTone === "success"
+                                    ? "bg-success"
+                                    : "bg-line-strong"
+                            }`}
+                            aria-hidden="true"
+                          />
+                          {verdict ? (
+                            <Badge tone={VERDICT_TONE[verdict] ?? "neutral"}>
+                              {verdict}
+                              {total > 0 ? ` (${total})` : ""}
+                            </Badge>
+                          ) : (
+                            <span className="text-ink-3">—</span>
+                          )}
+                        </td>
+                        <td className="max-w-[140px] truncate px-3 py-2.5 text-ink">
                           {run.project_name}
                         </td>
                         <td className="max-w-[140px] truncate px-3 py-2.5 text-ink-2">
@@ -122,17 +149,10 @@ export default function AllRunsPage() {
                           </code>
                         </td>
                         <td className="px-3 py-2.5">
-                          <Badge tone={STATUS_TONE[run.status] ?? "neutral"}>{run.status}</Badge>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          {verdict ? (
-                            <Badge tone={VERDICT_TONE[verdict] ?? "neutral"}>
-                              {verdict}
-                              {total > 0 ? ` (${total})` : ""}
-                            </Badge>
-                          ) : (
-                            <span className="text-ink-3">—</span>
-                          )}
+                          <span className="flex items-center gap-1.5 text-xs text-ink-2">
+                            <StatusDot tone={STATUS_TONE[run.status] ?? "neutral"} pulse={run.status === "running"} />
+                            {run.status}
+                          </span>
                         </td>
                         <td className="px-5 py-2.5 text-right text-xs text-ink-3">
                           {run.completed_at

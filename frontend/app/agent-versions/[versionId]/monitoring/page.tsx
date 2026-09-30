@@ -7,8 +7,10 @@ import { AppShell } from "../../../components/AppShell";
 import { Badge, type Tone } from "../../../components/ui/Badge";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { MetricCard } from "../../../components/ui/MetricCard";
 import { Skeleton } from "../../../components/ui/Skeleton";
-import { ChevronLeftIcon, MonitoringIcon } from "../../../components/ui/icons";
+import { VerdictBanner } from "../../../components/ui/VerdictBanner";
+import { CheckIcon, ChevronLeftIcon, CloseIcon, MonitoringIcon, WarningIcon } from "../../../components/ui/icons";
 import {
   ApiError,
   clearToken,
@@ -32,37 +34,6 @@ function formatMs(ms: number): string {
 function formatRate(rate: number | null): string {
   if (rate === null) return "—";
   return `${Math.round(rate * 100)}%`;
-}
-
-// Static class strings only (never a template-literal `text-${tone}`) —
-// Tailwind's build-time scanner needs the full class name to appear
-// literally, the same discipline Badge.tsx/Status.tsx already follow.
-const METRIC_VALUE_TONE: Record<Tone, string> = {
-  neutral: "text-ink",
-  success: "text-success",
-  warning: "text-warning",
-  danger: "text-danger",
-  accent: "text-accent",
-};
-
-function MetricCard({
-  label,
-  value,
-  hint,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: Tone;
-}) {
-  return (
-    <Card elevation="raised">
-      <p className="text-xs font-medium uppercase tracking-wide text-ink-3">{label}</p>
-      <p className={`mt-2 text-3xl font-bold tracking-tight ${METRIC_VALUE_TONE[tone]}`}>{value}</p>
-      {hint && <p className="mt-1 text-xs text-ink-3">{hint}</p>}
-    </Card>
-  );
 }
 
 /** A short, factual summary of why an execution's checks are notable —
@@ -150,30 +121,49 @@ export default function AgentVersionMonitoringPage() {
 
         {summary && summary.total_executions > 0 && (
           <>
-            <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {/* Dominant health signal first, then the pass/fail/
+                inconclusive counts it's built from, then the 8 remaining
+                technical metrics demoted to a denser secondary row —
+                not 12 equal tiles with failure rate buried among them. */}
+            <div className="mt-6">
+              <VerdictBanner
+                tone={summary.fail_count > 0 ? "danger" : summary.inconclusive_count > 0 ? "warning" : "success"}
+                icon={
+                  summary.fail_count > 0 ? <CloseIcon /> : summary.inconclusive_count > 0 ? <WarningIcon /> : <CheckIcon />
+                }
+                headline={`${formatRate(summary.failure_rate)} failure rate across ${summary.total_executions} execution${summary.total_executions === 1 ? "" : "s"}`}
+              />
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
               <MetricCard label="Total executions" value={String(summary.total_executions)} />
               <MetricCard label="Pass" value={String(summary.pass_count)} tone="success" />
               <MetricCard label="Fail" value={String(summary.fail_count)} tone="danger" />
               <MetricCard label="Inconclusive" value={String(summary.inconclusive_count)} tone="warning" />
-              <MetricCard label="Failure rate" value={formatRate(summary.failure_rate)} />
-              <MetricCard
-                label="Avg latency"
-                value={summary.average_latency_ms !== null ? formatMs(summary.average_latency_ms) : "—"}
-              />
-              <MetricCard label="Latency violations" value={String(summary.latency_threshold_violations)} />
-              <MetricCard label="Safety failures" value={String(summary.safety_failure_count)} tone={summary.safety_failure_count > 0 ? "danger" : undefined} />
-              <MetricCard label="Forbidden tool calls" value={String(summary.forbidden_tool_count)} tone={summary.forbidden_tool_count > 0 ? "danger" : undefined} />
-              <MetricCard label="Missing required tools" value={String(summary.missing_required_tool_count)} />
-              <MetricCard label="Schema failures" value={String(summary.schema_failure_count)} />
-              <MetricCard
-                label="Grounding failures"
-                value={
-                  summary.grounding_evaluated_count > 0
-                    ? `${summary.grounding_failure_count} / ${summary.grounding_evaluated_count}`
-                    : "—"
-                }
-                hint={summary.grounding_evaluated_count === 0 ? "Not evaluated (no reference context)" : undefined}
-              />
+            </div>
+
+            <div className="mt-5">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">Technical detail</p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                <MetricCard
+                  label="Avg latency"
+                  value={summary.average_latency_ms !== null ? formatMs(summary.average_latency_ms) : "—"}
+                />
+                <MetricCard label="Latency violations" value={String(summary.latency_threshold_violations)} />
+                <MetricCard label="Safety failures" value={String(summary.safety_failure_count)} tone={summary.safety_failure_count > 0 ? "danger" : undefined} />
+                <MetricCard label="Forbidden tool calls" value={String(summary.forbidden_tool_count)} tone={summary.forbidden_tool_count > 0 ? "danger" : undefined} />
+                <MetricCard label="Missing required tools" value={String(summary.missing_required_tool_count)} />
+                <MetricCard label="Schema failures" value={String(summary.schema_failure_count)} />
+                <MetricCard
+                  label="Grounding failures"
+                  value={
+                    summary.grounding_evaluated_count > 0
+                      ? `${summary.grounding_failure_count} / ${summary.grounding_evaluated_count}`
+                      : "—"
+                  }
+                  hint={summary.grounding_evaluated_count === 0 ? "Not evaluated (no reference context)" : undefined}
+                />
+              </div>
             </div>
 
             <div className="mt-7">

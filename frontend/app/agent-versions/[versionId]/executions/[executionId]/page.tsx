@@ -8,6 +8,7 @@ import { AppShell } from "../../../../components/AppShell";
 import { Badge, type Tone } from "../../../../components/ui/Badge";
 import { Button } from "../../../../components/ui/Button";
 import { CodeBlock, Disclosure, LabeledCodeBlock } from "../../../../components/ui/CodeDisclosure";
+import { FlowSteps, type FlowStep } from "../../../../components/ui/FlowSteps";
 import { Field } from "../../../../components/ui/Input";
 import { Section } from "../../../../components/ui/Section";
 import { Skeleton } from "../../../../components/ui/Skeleton";
@@ -121,10 +122,27 @@ function RegressionCandidatePanel({ executionId }: { executionId: string }) {
     createMutation.mutate();
   }
 
+  // PRODUCTION EXECUTION → ISSUE → REGRESSION CANDIDATE → SUITE (§31,
+  // reduced from the brief's 5-step model to the states this page can
+  // actually observe — there is no live "verification" signal to show
+  // back on this execution once a candidate is later run in a suite).
+  const flowSteps: FlowStep[] = [
+    { label: "Production execution", tone: "neutral" },
+    { label: "Issue detected", tone: "danger" },
+    candidate
+      ? { label: "Regression candidate created", tone: "accent" }
+      : { label: "Regression candidate", tone: "neutral", pulse: true },
+    candidate && candidate.status !== "candidate"
+      ? { label: "Accepted — active in Suite Runner", tone: "success" }
+      : { label: "Suite (pending acceptance)", tone: "neutral" },
+  ];
+
   if (candidate) {
     const isCandidate = candidate.status === "candidate";
     return (
-      <div className="rounded-lg border border-line bg-surface p-3">
+      <div className="flex flex-col gap-3">
+        <FlowSteps steps={flowSteps} />
+        <div className="rounded-lg border border-line bg-surface p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-medium text-ink">{candidate.name}</p>
           <Badge tone={isCandidate ? "warning" : "success"}>{candidate.status}</Badge>
@@ -174,20 +192,26 @@ function RegressionCandidatePanel({ executionId }: { executionId: string }) {
             Active — included in future Suite Runner executions.
           </p>
         )}
+        </div>
       </div>
     );
   }
 
   if (!open) {
     return (
-      <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-        Create regression candidate
-      </Button>
+      <div className="flex flex-col gap-3">
+        <FlowSteps steps={flowSteps} />
+        <Button variant="secondary" size="sm" onClick={() => setOpen(true)} className="self-start">
+          Create regression candidate
+        </Button>
+      </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 rounded-lg border border-line bg-surface p-3">
+    <div className="flex flex-col gap-3">
+      <FlowSteps steps={flowSteps} />
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 rounded-lg border border-line bg-surface p-3">
       <Field
         label="Test suite ID"
         value={suiteId}
@@ -233,7 +257,8 @@ function RegressionCandidatePanel({ executionId }: { executionId: string }) {
             : "Could not create the regression candidate."}
         </p>
       )}
-    </form>
+      </form>
+    </div>
   );
 }
 
@@ -334,13 +359,31 @@ export default function ExecutionDetailPage() {
 
             {execution.tool_calls.length > 0 && (
               <Section label="Tool calls">
-                <ul className="flex flex-col gap-2">
+                {/* A connected trace, not a plain list — the sequence
+                    itself is real information (call order), so the
+                    vertical line + numbered markers make that order
+                    visible instead of implied by list position alone.
+                    Markers tint danger for a failed call, so a broken
+                    step in the sequence is visible before expanding it. */}
+                <ol className="relative flex flex-col gap-3 border-l border-line pl-5">
                   {execution.tool_calls.map((tc, i) => (
-                    <li key={i}>
+                    <li
+                      key={i}
+                      className="animate-fade-in-up relative"
+                      style={{ animationDelay: `${Math.min(i, 8) * 60}ms` }}
+                    >
+                      <span
+                        className={`absolute top-1 -left-7 flex h-4 w-4 items-center justify-center rounded-full border-2 border-background text-[9px] font-semibold ${
+                          tc.ok ? "bg-line-strong text-ink-2" : "bg-danger text-accent-ink"
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {i + 1}
+                      </span>
                       <ToolCallRow tc={tc} />
                     </li>
                   ))}
-                </ul>
+                </ol>
               </Section>
             )}
 

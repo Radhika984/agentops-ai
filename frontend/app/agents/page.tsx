@@ -13,13 +13,16 @@ import { Field } from "../components/ui/Input";
 import { SelectField } from "../components/ui/Select";
 import { Skeleton } from "../components/ui/Skeleton";
 import { AgentIcon, ArrowRightIcon } from "../components/ui/icons";
+import { PageHeader } from "../components/ui/PageHeader";
 import {
   ApiError,
   clearToken,
   createAgent,
   listAgents,
+  listAgentVersions,
   listProjects,
   type AgentRead,
+  type AgentVersionRead,
   type ProjectRead,
 } from "../lib/api";
 import { useRequireAuth } from "../lib/useRequireAuth";
@@ -67,6 +70,22 @@ export default function AgentsPage() {
     enabled: checkedAuth && projectsQuery.data !== undefined,
   });
 
+  // One more fan-out level — same technique the Monitoring picker
+  // already uses (listAgentVersions per agent) — to surface each
+  // agent's real baseline version + adapter type at list depth (§23),
+  // instead of only one click away on the detail page.
+  const agentIds = (agentsQuery.data ?? []).map(({ agent }) => agent.id);
+  const baselineVersionsQuery = useQuery({
+    queryKey: ["agents-baseline-versions", agentIds.join(",")],
+    queryFn: async (): Promise<Record<string, AgentVersionRead | undefined>> => {
+      const entries = await Promise.all(
+        agentIds.map(async (id) => [id, (await listAgentVersions(id)).find((v) => v.is_baseline)] as const),
+      );
+      return Object.fromEntries(entries);
+    },
+    enabled: checkedAuth && agentsQuery.data !== undefined,
+  });
+
   const createMutation = useMutation({
     mutationFn: () =>
       createAgent({ project_id: projectId, name, description: description.trim() || undefined }),
@@ -98,20 +117,17 @@ export default function AgentsPage() {
   return (
     <AppShell onLogout={handleLogout}>
       <div className="animate-fade-in-up mx-auto w-full max-w-5xl px-4 py-7 md:px-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-ink">Agents</h1>
-            <p className="mt-1.5 text-sm text-ink-2">
-              Registered Systems Under Test — connect an agent, create versions, and run test
-              invocations.
-            </p>
-          </div>
-          {hasProjects && (
-            <Button variant="primary" onClick={() => setIsCreateOpen((v) => !v)}>
-              + New agent
-            </Button>
-          )}
-        </div>
+        <PageHeader
+          title="Agents"
+          description="Registered Systems Under Test — connect an agent, create versions, and run test invocations."
+          action={
+            hasProjects && (
+              <Button variant="primary" onClick={() => setIsCreateOpen((v) => !v)}>
+                + New agent
+              </Button>
+            )
+          }
+        />
 
         {isCreateOpen && hasProjects && (
           <Card className="mt-5" elevation="raised">
@@ -172,9 +188,9 @@ export default function AgentsPage() {
 
         <div className="mt-7">
           {isLoading && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex flex-col gap-2">
               {[0, 1, 2].map((i) => (
-                <Skeleton key={i} className="h-28" />
+                <Skeleton key={i} className="h-16" />
               ))}
             </div>
           )}
@@ -211,39 +227,57 @@ export default function AgentsPage() {
             />
           )}
 
+          {/* List rows, not a card grid (§14/§23) — an agent's real
+              adapter type and baseline version are technical facts, not
+              decoration, and belong on a scannable line, not buried
+              behind a click into the detail page. */}
           {agents.length > 0 && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {agents.map(({ agent, project }, index) => (
-                <Link key={agent.id} href={`/agents/${agent.id}`} className="no-underline">
-                  <Card
-                    elevation="raised"
-                    className="group glow-hover animate-fade-in-up relative h-full overflow-hidden transition-transform duration-200 hover:-translate-y-1"
-                    style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
-                  >
-                    <span
-                      className="absolute top-0 left-0 h-full w-1 bg-accent/70"
-                      aria-hidden="true"
-                    />
-                    <div className="flex items-start justify-between">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-md bg-accent-soft text-accent">
-                        <AgentIcon />
-                      </span>
-                      <Badge tone={agent.is_enabled ? "success" : "neutral"}>
-                        {agent.is_enabled ? "enabled" : "disabled"}
-                      </Badge>
-                    </div>
-                    <p className="mt-3 truncate text-sm font-semibold text-ink">{agent.name}</p>
-                    <p className="mt-1 line-clamp-2 min-h-[2.5em] text-xs text-ink-3">
-                      {agent.description || "No description yet"}
-                    </p>
-                    <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-2.5 text-xs text-ink-3">
-                      <span className="truncate">{project.name}</span>
-                      <ArrowRightIcon className="shrink-0 text-ink-3 opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-accent group-hover:opacity-100" />
-                    </div>
-                  </Card>
-                </Link>
-              ))}
-            </div>
+            <Card elevation="raised" padded={false} className="overflow-hidden">
+              <ul className="flex flex-col divide-y divide-line">
+                {agents.map(({ agent, project }) => {
+                  const baseline = baselineVersionsQuery.data?.[agent.id];
+                  return (
+                    <li key={agent.id}>
+                      <Link
+                        href={`/agents/${agent.id}`}
+                        className="group flex items-center gap-3 px-5 py-3.5 no-underline transition-colors duration-150 hover:bg-surface-2"
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent">
+                          <AgentIcon />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-semibold text-ink">{agent.name}</p>
+                            <Badge tone={agent.is_enabled ? "success" : "neutral"}>
+                              {agent.is_enabled ? "enabled" : "disabled"}
+                            </Badge>
+                          </div>
+                          <p className="truncate text-xs text-ink-3">
+                            {agent.description || "No description yet"}
+                          </p>
+                        </div>
+                        <span className="hidden shrink-0 items-center gap-1.5 text-xs text-ink-3 sm:flex">
+                          {baseline ? (
+                            <>
+                              <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-ink-2">
+                                {baseline.label}
+                              </code>
+                              <span>{baseline.adapter_type}</span>
+                            </>
+                          ) : (
+                            "no baseline"
+                          )}
+                        </span>
+                        <span className="hidden shrink-0 truncate text-xs text-ink-3 md:block">
+                          {project.name}
+                        </span>
+                        <ArrowRightIcon className="shrink-0 text-ink-3 opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-accent group-hover:opacity-100" />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
           )}
         </div>
       </div>

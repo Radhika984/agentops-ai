@@ -10,7 +10,7 @@ import { Card } from "../components/ui/Card";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Field, PasswordField } from "../components/ui/Input";
 import { Skeleton } from "../components/ui/Skeleton";
-import { SettingsIcon } from "../components/ui/icons";
+import { SafetyIcon, SettingsIcon, WarningIcon } from "../components/ui/icons";
 import {
   ApiError,
   changePassword,
@@ -27,11 +27,15 @@ import {
 import { useRequireAuth } from "../lib/useRequireAuth";
 
 type Tab = "profile" | "notifications" | "api-keys" | "security";
-const TABS: { id: Tab; label: string }[] = [
+// `sensitive` drives the small SafetyIcon affordance in the tab bar —
+// only the two tabs that can grant access (revocable API keys) or
+// change the account's own credentials (password) are flagged, not
+// every tab, so the signal stays meaningful.
+const TABS: { id: Tab; label: string; sensitive?: boolean }[] = [
   { id: "profile", label: "Profile" },
   { id: "notifications", label: "Notification Preferences" },
-  { id: "api-keys", label: "API Keys" },
-  { id: "security", label: "Security" },
+  { id: "api-keys", label: "API Keys", sensitive: true },
+  { id: "security", label: "Security", sensitive: true },
 ];
 
 function ProfileTab() {
@@ -237,7 +241,10 @@ function ApiKeysTab() {
 
       {revealedKey && (
         <Card elevation="glass" className="border-accent/30">
-          <p className="text-sm font-semibold text-ink">Your new API key</p>
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+            <WarningIcon className="text-accent" />
+            Your new API key — shown once
+          </p>
           <p className="mt-1 text-xs text-ink-3">
             Copy it now — for security, it is shown only this once and can never be retrieved
             again.
@@ -305,8 +312,9 @@ function ApiKeysTab() {
                     </div>
 
                     {!key.revoked_at && isConfirming && (
-                      <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
-                        <span className="text-xs text-ink-2">
+                      <div className="flex flex-wrap items-center gap-2 rounded-md border border-danger/30 bg-danger-soft px-3 py-2.5">
+                        <WarningIcon className="text-danger" />
+                        <span className="text-xs text-danger">
                           Revoke &ldquo;{key.name}&rdquo;? This can&apos;t be undone.
                         </span>
                         <Button
@@ -379,7 +387,8 @@ function SecurityTab() {
 
   return (
     <Card elevation="raised" className="max-w-lg">
-      <p className="text-xs text-ink-3">
+      <p className="flex items-start gap-2 rounded-md border border-line bg-surface-2 px-3 py-2.5 text-xs text-ink-2">
+        <WarningIcon className="mt-0.5 shrink-0 text-ink-3" />
         This app authenticates with a JWT bearer token issued at login. Changing your password
         here immediately invalidates it for any future login attempt.
       </p>
@@ -443,15 +452,33 @@ export default function SettingsPage() {
           <h1 className="text-3xl font-bold tracking-tight text-ink">Settings</h1>
         </div>
 
-        <div className="mt-5 flex items-center gap-1 overflow-x-auto border-b border-line">
+        {/* overflow-y-hidden is deliberate, not decorative: setting only
+            overflow-x-auto leaves overflow-y at its default, and per the
+            CSS Overflow spec a non-visible x-axis forces the y-axis to
+            also resolve to auto — so any content even 1px taller than
+            this row (the sensitive-tab SafetyIcon included) was enough
+            to spawn a stray vertical scrollbar affordance next to a row
+            that was never meant to scroll vertically at all.
+            py-1.5 is load-bearing, not spacing polish: a keyboard focus
+            ring needs outline-width(2px) + outline-offset(2px) = 4px of
+            clearance beyond a button's own box on every side. Without
+            this padding the container's height matched the buttons'
+            height almost exactly, so overflow-y-hidden silently clipped
+            the top/bottom of every tab's focus ring — found by actually
+            tabbing to a tab and measuring the rendered outline's real
+            clearance (getBoundingClientRect on both the focused button
+            and its container), not assumed. 6px of padding leaves
+            comfortable headroom above the 4px the ring actually needs. */}
+        <div className="mt-5 flex items-center gap-1 overflow-x-auto overflow-y-hidden border-b border-line py-1.5">
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`relative shrink-0 px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors duration-150 ${
-                tab === t.id ? "text-ink" : "text-ink-3 hover:text-ink-2"
+              className={`relative flex shrink-0 items-center gap-1.5 rounded-t-md px-3.5 py-2 text-sm font-medium whitespace-nowrap transition-colors duration-150 ${
+                tab === t.id ? "bg-surface-2 text-ink" : "text-ink-3 hover:text-ink-2"
               }`}
             >
+              {t.sensitive && <SafetyIcon className={tab === t.id ? "text-accent" : "text-ink-3"} width={14} height={14} />}
               {t.label}
               {tab === t.id && (
                 <span className="absolute right-0 -bottom-px left-0 h-0.5 rounded-full bg-accent" />

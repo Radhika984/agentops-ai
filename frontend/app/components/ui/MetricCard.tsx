@@ -16,16 +16,19 @@ const METRIC_VALUE_TONE: Record<Tone, string> = {
 export function MetricCard({
   label,
   value,
+  hint,
   tone = "neutral",
 }: {
   label: string;
   value: string;
+  hint?: string;
   tone?: Tone;
 }) {
   return (
     <Card elevation="raised">
-      <p className="text-xs font-medium tracking-wide text-ink-3 uppercase">{label}</p>
-      <p className={`mt-2 text-2xl font-bold tracking-tight ${METRIC_VALUE_TONE[tone]}`}>{value}</p>
+      <p className="text-metric-label">{label}</p>
+      <p className={`text-metric-value mt-2 ${METRIC_VALUE_TONE[tone]}`}>{value}</p>
+      {hint && <p className="text-body-muted mt-1">{hint}</p>}
     </Card>
   );
 }

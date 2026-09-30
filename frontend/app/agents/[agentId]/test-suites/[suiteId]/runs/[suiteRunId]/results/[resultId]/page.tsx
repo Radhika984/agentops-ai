@@ -7,9 +7,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../../../../../../../../components/AppShell";
 import { Badge, type Tone } from "../../../../../../../../components/ui/Badge";
 import { Button } from "../../../../../../../../components/ui/Button";
-import { Disclosure, LabeledCodeBlock } from "../../../../../../../../components/ui/CodeDisclosure";
+import { CodeBlock, Disclosure, LabeledCodeBlock } from "../../../../../../../../components/ui/CodeDisclosure";
 import { Skeleton } from "../../../../../../../../components/ui/Skeleton";
-import { ChevronLeftIcon, WarningIcon } from "../../../../../../../../components/ui/icons";
+import { FlowSteps, type FlowStep } from "../../../../../../../../components/ui/FlowSteps";
+import { VerdictBanner } from "../../../../../../../../components/ui/VerdictBanner";
+import { CheckIcon, ChevronLeftIcon, CloseIcon, WarningIcon } from "../../../../../../../../components/ui/icons";
 import {
   ApiError,
   AUTOFIX_OPTION_LABEL,
@@ -18,9 +20,12 @@ import {
   getSuiteRunResult,
   listTestCases,
   proposeAutoFix,
+  type Assertion,
   type EvaluationCheck,
+  type ExpectedToolCall,
   type RCAEvidenceItem,
   type RCATier,
+  type TestCaseRead,
   type TrialEntry,
   type Verdict,
 } from "../../../../../../../../lib/api";
@@ -47,6 +52,79 @@ function formatOutput(value: unknown): string {
   if (value === null || value === undefined) return "(no output)";
   if (typeof value === "string") return value;
   return JSON.stringify(value, null, 2);
+}
+
+function verdictIcon(verdict: Verdict) {
+  if (verdict === "PASS") return <CheckIcon />;
+  if (verdict === "FAIL") return <CloseIcon />;
+  return <WarningIcon />;
+}
+
+function AssertionChip({ assertion }: { assertion: Assertion }) {
+  return (
+    <li className="rounded-md bg-surface px-2.5 py-1.5 font-mono text-[11px] text-ink-2">
+      <span className="text-ink">{assertion.path}</span> {assertion.op}
+      {assertion.value !== undefined && <> {JSON.stringify(assertion.value)}</>}
+    </li>
+  );
+}
+
+/** The EXPECTED half of the EXPECTED → OBSERVED → DIFFERENCE → VERDICT
+ * sequence (§26). Every field here comes straight off the real
+ * TestCaseRead contract (already fetched by this page for the
+ * breadcrumb's case name) — nothing recomputed, and a field is simply
+ * omitted when the contract didn't set it rather than shown as blank. */
+function ExpectedPanel({ testCase }: { testCase: TestCaseRead | undefined }) {
+  if (!testCase) {
+    return <p className="text-xs text-ink-3">Test case contract unavailable.</p>;
+  }
+  const hasAssertions = (testCase.assertions?.length ?? 0) > 0;
+  const hasTools = (testCase.expected_tool_calls?.length ?? 0) > 0;
+  const nothingSet =
+    !testCase.expected_output && !hasAssertions && !hasTools && !testCase.rubric && !testCase.reference_context;
+
+  return (
+    <div className="flex flex-col gap-3 text-xs">
+      {nothingSet && (
+        <p className="text-ink-3">No expected-output ground truth set on this test case.</p>
+      )}
+      {testCase.expected_output && (
+        <div>
+          <p className="font-semibold tracking-wide text-ink-3 uppercase">Expected output</p>
+          <p className="mt-1 whitespace-pre-wrap text-ink-2">{testCase.expected_output}</p>
+        </div>
+      )}
+      {hasAssertions && (
+        <div>
+          <p className="font-semibold tracking-wide text-ink-3 uppercase">Assertions</p>
+          <ul className="mt-1 flex flex-col gap-1">
+            {testCase.assertions!.map((a, i) => (
+              <AssertionChip key={i} assertion={a} />
+            ))}
+          </ul>
+        </div>
+      )}
+      {hasTools && (
+        <div>
+          <p className="font-semibold tracking-wide text-ink-3 uppercase">Expected tool calls</p>
+          <ul className="mt-1 flex flex-col gap-1">
+            {testCase.expected_tool_calls!.map((t: ExpectedToolCall, i) => (
+              <li key={i} className="rounded-md bg-surface px-2.5 py-1.5 font-mono text-[11px] text-ink-2">
+                {t.tool}
+                {t.required === false && <span className="ml-1 text-ink-3">(optional)</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {testCase.rubric && (
+        <div>
+          <p className="font-semibold tracking-wide text-ink-3 uppercase">Rubric</p>
+          <p className="mt-1 whitespace-pre-wrap text-ink-2">{testCase.rubric}</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** The LLM Judge (Phase 19) persists its score/threshold only inside
@@ -187,30 +265,12 @@ function RCAPanel({ suiteRunId, resultId }: { suiteRunId: string; resultId: stri
       )}
 
       {rca && (
+        // FAILURE → EVIDENCE → CATEGORY → EXPLANATION → EVIDENCE LEVEL
+        // (§27). FAILURE itself is the page's own VerdictBanner at the
+        // top — this panel starts from EVIDENCE, the real matched
+        // checks, then works down to the tier (evidence level) as a
+        // closing confidence statement rather than an opening badge.
         <div className="mt-2 flex flex-col gap-3 text-xs">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={tierTone(rca.tier)}>{tierLabel(rca.tier)}</Badge>
-            {rca.root_cause_category && <Badge tone="danger">{rca.root_cause_category}</Badge>}
-          </div>
-
-          {rca.tier === "llm_hypothesis" ? (
-            <div className="rounded-md border border-accent/30 bg-accent-soft px-3 py-2">
-              <p className="text-[10px] font-semibold tracking-wide text-accent uppercase">
-                RCA hypothesis — not established fact
-              </p>
-              <p className="mt-1 whitespace-pre-wrap text-ink-2">{rca.explanation}</p>
-            </div>
-          ) : (
-            <p className="whitespace-pre-wrap text-ink-2">{rca.explanation}</p>
-          )}
-
-          {rca.all_matched_categories.length > 1 && (
-            <p className="text-ink-3">
-              Other matched categories:{" "}
-              {rca.all_matched_categories.filter((c) => c !== rca.root_cause_category).join(", ")}
-            </p>
-          )}
-
           {rca.evidence_references.length > 0 && (
             <div>
               <p className="font-semibold tracking-wide text-ink-3 uppercase">Evidence</p>
@@ -221,6 +281,44 @@ function RCAPanel({ suiteRunId, resultId }: { suiteRunId: string; resultId: stri
               </ul>
             </div>
           )}
+
+          {rca.root_cause_category && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold tracking-wide text-ink-3 uppercase">Category</span>
+              <Badge tone="danger">{rca.root_cause_category}</Badge>
+              {rca.all_matched_categories.length > 1 && (
+                <span className="text-ink-3">
+                  also matched: {rca.all_matched_categories.filter((c) => c !== rca.root_cause_category).join(", ")}
+                </span>
+              )}
+            </div>
+          )}
+
+          <div>
+            <p className="font-semibold tracking-wide text-ink-3 uppercase">Explanation</p>
+            {rca.tier === "llm_hypothesis" ? (
+              <div className="mt-1 rounded-md border border-accent/30 bg-accent-soft px-3 py-2">
+                <p className="text-[10px] font-semibold tracking-wide text-accent uppercase">
+                  Hypothesis — not an established fact
+                </p>
+                <p className="mt-1 whitespace-pre-wrap text-ink-2">{rca.explanation}</p>
+              </div>
+            ) : rca.tier === "insufficient_evidence" ? (
+              <div className="mt-1 rounded-md border border-warning/30 bg-warning-soft px-3 py-2">
+                <p className="text-[10px] font-semibold tracking-wide text-warning uppercase">
+                  Insufficient evidence — no root cause could be established
+                </p>
+                <p className="mt-1 whitespace-pre-wrap text-ink-2">{rca.explanation}</p>
+              </div>
+            ) : (
+              <p className="mt-1 whitespace-pre-wrap text-ink-2">{rca.explanation}</p>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 border-t border-line pt-2.5">
+            <span className="font-semibold tracking-wide text-ink-3 uppercase">Evidence level</span>
+            <Badge tone={tierTone(rca.tier)}>{tierLabel(rca.tier)}</Badge>
+          </div>
 
           {rca.trace_span_ids.length > 0 && (
             <div>
@@ -284,7 +382,13 @@ function AutoFixPanel({ suiteRunId, resultId }: { suiteRunId: string; resultId: 
   return (
     <div className="border-t border-line px-4 py-3.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">AutoFix</p>
+        <div>
+          <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">AutoFix</p>
+          <p className="mt-0.5 text-[11px] text-ink-3">
+            AI proposes, humans decide — a proposal never silently modifies the agent version&apos;s
+            adapter configuration.
+          </p>
+        </div>
         {!proposal && (
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-1.5 text-[11px] text-ink-3">
@@ -318,7 +422,23 @@ function AutoFixPanel({ suiteRunId, resultId }: { suiteRunId: string; resultId: 
 
       {proposal && (
         <div className="mt-2 flex flex-col gap-2 text-xs">
-          <div className="flex flex-wrap items-center gap-2">
+          {/* PROPOSE → REVIEW → RE-VERIFY (§28) — the third step is
+              always shown as the real next step, not a resolved one:
+              this panel only has the proposal response, not the linked
+              Approval's later outcome (that's tracked on /approvals). */}
+          <FlowSteps
+            steps={
+              [
+                { label: "Proposed", tone: "neutral" },
+                proposal.requires_approval
+                  ? { label: "Pending review", tone: "warning", pulse: true }
+                  : { label: "No approval needed", tone: "neutral" },
+                proposal.requires_approval && { label: "Re-verify after decision", tone: "neutral" },
+              ].filter(Boolean) as FlowStep[]
+            }
+          />
+
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             <Badge tone={proposal.requires_approval ? "warning" : "neutral"}>
               {AUTOFIX_OPTION_LABEL[proposal.option] ?? proposal.option}
             </Badge>
@@ -432,86 +552,93 @@ export default function TestCaseResultDetailPage() {
         )}
 
         {result && (
-          <div className="mt-6 overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-md">
-            <div className="grid grid-cols-2 gap-3 px-4 py-3.5 sm:grid-cols-4">
-              <div>
-                <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Verdict</p>
-                <div className="mt-1">
-                  <Badge tone={verdictTone(result.verdict)}>{result.verdict}</Badge>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Method</p>
-                <p className="mt-1 text-sm font-medium text-ink">{result.verdict_method}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Latency</p>
-                <p className="mt-1 text-sm font-medium text-ink">
+          <div className="mt-6 flex flex-col gap-5">
+            {/* VERDICT — the dominant moment, before anything else. */}
+            <VerdictBanner
+              tone={verdictTone(result.verdict)}
+              icon={verdictIcon(result.verdict)}
+              headline={`${result.verdict} — via ${result.verdict_method}`}
+              reason={
+                result.trials.length > 0
+                  ? `Aggregated from all ${result.trials.length} trial${result.trials.length === 1 ? "" : "s"} below — shown exactly as returned, never recalculated here.`
+                  : undefined
+              }
+            />
+
+            <div className="flex flex-wrap gap-4 text-xs text-ink-3">
+              <span>
+                Latency:{" "}
+                <span className="font-medium text-ink-2 tabular-nums">
                   {result.latency_ms !== null ? formatMs(result.latency_ms) : "—"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Trials</p>
-                <p className="mt-1 text-sm font-medium text-ink">{result.trials.length}</p>
-              </div>
+                </span>
+              </span>
+              <span>
+                Trials: <span className="font-medium text-ink-2 tabular-nums">{result.trials.length}</span>
+              </span>
             </div>
 
-            {result.trials.length > 0 && (
-              <p className="border-t border-line px-4 py-2.5 text-xs text-ink-3">
-                The verdict above is aggregated from all {result.trials.length} trial
-                {result.trials.length === 1 ? "" : "s"} below via &ldquo;{result.verdict_method}&rdquo; — shown
-                exactly as returned, never recalculated here.
+            {result.error && (
+              <p className="flex items-center gap-1.5 rounded-md bg-danger-soft px-2.5 py-2 text-xs text-danger">
+                <WarningIcon />
+                {result.error}
               </p>
             )}
 
-            {result.error && (
-              <div className="border-t border-line px-4 py-3.5">
-                <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Error</p>
-                <p className="mt-2 flex items-center gap-1.5 rounded-md bg-danger-soft px-2.5 py-2 text-xs text-danger">
-                  <WarningIcon />
-                  {result.error}
-                </p>
-              </div>
-            )}
-
-            <div className="border-t border-line px-4 py-3.5">
-              <LabeledCodeBlock label="Actual output" value={formatOutput(result.actual_output)} />
-            </div>
-
-            {result.suggested_fix && (
-              <div className="border-t border-line px-4 py-3.5">
-                <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Suggested fix</p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-ink-2">{result.suggested_fix}</p>
-              </div>
-            )}
-
-            <div className="border-t border-line px-4 py-3.5">
-              <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Checks</p>
-              {result.checks.length === 0 ? (
-                <p className="mt-2 text-xs text-ink-3">No checks were applicable to this result.</p>
-              ) : (
-                <ul className="mt-2 flex flex-col gap-1.5">
-                  {result.checks.map((check, i) => (
-                    <CheckRow key={i} check={check} />
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <RCAPanel suiteRunId={suiteRunId} resultId={resultId} />
-
-            <AutoFixPanel suiteRunId={suiteRunId} resultId={resultId} />
-
-            {result.trials.length > 0 && (
-              <div className="border-t border-line px-4 py-3.5">
-                <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Trials</p>
-                <div className="mt-2 flex flex-col gap-2">
-                  {result.trials.map((trial) => (
-                    <TrialCard key={trial.trial_index} trial={trial} />
-                  ))}
+            <div className="overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-md">
+              {/* EXPECTED → OBSERVED (§26) — the real test-case contract
+                  next to what the agent actually produced, side by side. */}
+              <div className="grid grid-cols-1 divide-y divide-line sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                <div className="px-4 py-3.5">
+                  <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Expected</p>
+                  <div className="mt-2">
+                    <ExpectedPanel testCase={testCase} />
+                  </div>
+                </div>
+                <div className="px-4 py-3.5">
+                  <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Observed</p>
+                  <div className="mt-2">
+                    <CodeBlock value={formatOutput(result.actual_output)} />
+                  </div>
                 </div>
               </div>
-            )}
+
+              {result.suggested_fix && (
+                <div className="border-t border-line px-4 py-3.5">
+                  <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Suggested fix</p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-ink-2">{result.suggested_fix}</p>
+                </div>
+              )}
+
+              {/* DIFFERENCE (§26) — what was actually checked between
+                  expected and observed, and which checks diverged. */}
+              <div className="border-t border-line px-4 py-3.5">
+                <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Difference</p>
+                {result.checks.length === 0 ? (
+                  <p className="mt-2 text-xs text-ink-3">No checks were applicable to this result.</p>
+                ) : (
+                  <ul className="mt-2 flex flex-col gap-1.5">
+                    {result.checks.map((check, i) => (
+                      <CheckRow key={i} check={check} />
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <RCAPanel suiteRunId={suiteRunId} resultId={resultId} />
+
+              <AutoFixPanel suiteRunId={suiteRunId} resultId={resultId} />
+
+              {result.trials.length > 0 && (
+                <div className="border-t border-line px-4 py-3.5">
+                  <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Trials</p>
+                  <div className="mt-2 flex flex-col gap-2">
+                    {result.trials.map((trial) => (
+                      <TrialCard key={trial.trial_index} trial={trial} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

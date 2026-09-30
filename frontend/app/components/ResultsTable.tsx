@@ -91,8 +91,17 @@ export function ResultsTable({
                       )
                     }
                   >
-                    <td className="max-w-[180px] truncate px-5 py-2.5 text-ink">
-                      {result.test_case_name}
+                    <td className="max-w-[220px] px-5 py-2.5 text-ink">
+                      <p className="truncate">{result.test_case_name}</p>
+                      {/* The real DIFFERENCE signal available at list depth
+                          — result.error, already fetched but previously
+                          dropped. Nothing recomputed; FAIL/INCONCLUSIVE
+                          rows with no error just show nothing extra. */}
+                      {result.error && (
+                        <p className="mt-0.5 truncate text-xs text-ink-3" title={result.error}>
+                          {result.error}
+                        </p>
+                      )}
                     </td>
                     <td className="max-w-[140px] truncate px-3 py-2.5 text-ink-2">
                       {result.agent_name}

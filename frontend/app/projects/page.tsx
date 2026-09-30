@@ -11,7 +11,8 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { TextInput } from "../components/ui/Input";
 import { Skeleton } from "../components/ui/Skeleton";
 import { ArrowRightIcon, EvaluationMark, ProjectsIcon, SearchIcon } from "../components/ui/icons";
-import { ApiError, clearToken, createProject, listProjects } from "../lib/api";
+import { PageHeader } from "../components/ui/PageHeader";
+import { ApiError, clearToken, createProject, listAgents, listProjects } from "../lib/api";
 import { useRequireAuth } from "../lib/useRequireAuth";
 
 export default function ProjectsPage() {
@@ -26,6 +27,21 @@ export default function ProjectsPage() {
     queryKey: ["projects"],
     queryFn: listProjects,
     enabled: checkedAuth,
+  });
+
+  // Same per-project fan-out agents/page.tsx already performs (ProjectRead
+  // itself carries no agent count — there is no account-wide "count
+  // agents per project" endpoint) — real counts, not a new capability.
+  const agentCountsQuery = useQuery({
+    queryKey: ["projects-agent-counts", (projectsQuery.data ?? []).map((p) => p.id).join(",")],
+    queryFn: async (): Promise<Record<string, number>> => {
+      const projects = projectsQuery.data ?? [];
+      const entries = await Promise.all(
+        projects.map(async (p) => [p.id, (await listAgents(p.id)).length] as const),
+      );
+      return Object.fromEntries(entries);
+    },
+    enabled: checkedAuth && projectsQuery.data !== undefined,
   });
 
   const createMutation = useMutation({
@@ -67,17 +83,15 @@ export default function ProjectsPage() {
   return (
     <AppShell onLogout={handleLogout}>
       <div className="animate-fade-in-up mx-auto w-full max-w-5xl px-4 py-7 md:px-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-ink">Projects</h1>
-            <p className="mt-1.5 text-sm text-ink-2">
-              Manage and evaluate your AI agent workspaces.
-            </p>
-          </div>
-          <Button variant="primary" onClick={() => setIsCreateOpen((v) => !v)}>
-            + New project
-          </Button>
-        </div>
+        <PageHeader
+          title="Projects"
+          description="Manage and evaluate your AI agent workspaces."
+          action={
+            <Button variant="primary" onClick={() => setIsCreateOpen((v) => !v)}>
+              + New project
+            </Button>
+          }
+        />
 
         {projectsQuery.data && projectsQuery.data.length > 0 && (
           <div className="mt-5">
@@ -129,9 +143,9 @@ export default function ProjectsPage() {
 
         <div className="mt-7">
           {projectsQuery.isLoading && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex flex-col gap-2">
               {[0, 1, 2].map((i) => (
-                <Skeleton key={i} className="h-28" />
+                <Skeleton key={i} className="h-14" />
               ))}
             </div>
           )}
@@ -166,48 +180,42 @@ export default function ProjectsPage() {
               />
             )}
 
+          {/* Scannable rows, not a card grid (§14/§22) — a project is a
+              workspace, not a decorative tile; ownership/agent-count/
+              recency read left-to-right in one glance across many rows. */}
           {filteredProjects.length > 0 && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredProjects.map((project, index) => (
-                <Link key={project.id} href={`/projects/${project.id}/chat`} className="no-underline">
-                  <Card
-                    elevation="raised"
-                    className="group glow-hover animate-fade-in-up relative h-full overflow-hidden p-5 transition-transform duration-200 hover:-translate-y-1"
-                    style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
-                  >
-                    <span
-                      className="absolute top-0 left-0 h-full w-0.75 bg-linear-to-b from-accent to-accent/30"
-                      aria-hidden="true"
-                    />
-                    <span
-                      className="pointer-events-none absolute -top-10 -left-10 h-32 w-32 rounded-full bg-accent/10 opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-100"
-                      aria-hidden="true"
-                    />
-                    <div className="relative flex items-start justify-between">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-soft text-accent ring-1 ring-accent/15 transition-transform duration-200 group-hover:scale-105">
-                        <ProjectsIcon />
-                      </span>
-                      <span
-                        className="text-ink-3 opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-accent group-hover:opacity-100"
-                        aria-hidden="true"
+            <Card elevation="raised" padded={false} className="overflow-hidden">
+              <ul className="flex flex-col divide-y divide-line">
+                {filteredProjects.map((project) => {
+                  const agentCount = agentCountsQuery.data?.[project.id];
+                  return (
+                    <li key={project.id}>
+                      <Link
+                        href={`/projects/${project.id}/chat`}
+                        className="group flex items-center gap-3 px-5 py-3.5 no-underline transition-colors duration-150 hover:bg-surface-2"
                       >
-                        <ArrowRightIcon />
-                      </span>
-                    </div>
-                    <p className="relative mt-3.5 truncate text-[15px] font-semibold text-ink">
-                      {project.name}
-                    </p>
-                    <p className="relative mt-1 line-clamp-2 min-h-[2.5em] text-xs text-ink-3">
-                      {project.description || "No description yet"}
-                    </p>
-                    <div className="relative mt-3.5 flex items-center justify-between border-t border-line pt-3 text-[11px] text-ink-3">
-                      <span>Created {new Date(project.created_at).toLocaleDateString()}</span>
-                      <span>Updated {new Date(project.updated_at).toLocaleDateString()}</span>
-                    </div>
-                  </Card>
-                </Link>
-              ))}
-            </div>
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent">
+                          <ProjectsIcon />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-ink">{project.name}</p>
+                          <p className="truncate text-xs text-ink-3">
+                            {project.description || "No description yet"}
+                          </p>
+                        </div>
+                        <span className="hidden shrink-0 text-xs text-ink-3 sm:block">
+                          {agentCount !== undefined ? `${agentCount} agent${agentCount === 1 ? "" : "s"}` : "—"}
+                        </span>
+                        <span className="hidden shrink-0 text-xs text-ink-3 md:block">
+                          Updated {new Date(project.updated_at).toLocaleDateString()}
+                        </span>
+                        <ArrowRightIcon className="shrink-0 text-ink-3 opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-accent group-hover:opacity-100" />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
           )}
         </div>
       </div>

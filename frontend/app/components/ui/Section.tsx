@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 export function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="border-t border-line px-4 py-3.5 first:border-t-0">
-      <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">{label}</p>
+      <p className="text-section-title">{label}</p>
       <div className="mt-2">{children}</div>
     </div>
   );

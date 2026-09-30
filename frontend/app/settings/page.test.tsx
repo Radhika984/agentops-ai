@@ -188,7 +188,7 @@ describe("Settings — ApiKeysTab — UX-001 revoke confirmation", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "+ Create key" }));
 
-    expect(await screen.findByText("Your new API key")).toBeInTheDocument();
+    expect(await screen.findByText("Your new API key — shown once")).toBeInTheDocument();
     expect(screen.getByText("aops_xyz_secret")).toBeInTheDocument();
     expect(api.createApiKey).toHaveBeenCalledWith("New key");
   });

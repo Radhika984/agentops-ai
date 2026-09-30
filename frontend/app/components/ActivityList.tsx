@@ -19,7 +19,7 @@ function readString(metadata: Record<string, unknown>, key: string): string | nu
  * null — no chip, just the plain title/description row below — for any
  * event whose metadata doesn't actually contain a recognized field,
  * rather than guessing. */
-function eventBadge(event: ActivityEventRead) {
+export function eventBadge(event: ActivityEventRead) {
   if (event.event_type === "release_gate_evaluated") {
     const decision = readString(event.event_metadata, "decision");
     if (decision === "pass") return <Badge tone="success">PASS</Badge>;

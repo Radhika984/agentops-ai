@@ -4,6 +4,7 @@ import { useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { eventBadge } from "../components/ActivityList";
 import { AppShell } from "../components/AppShell";
 import { Badge, type Tone } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -11,11 +12,13 @@ import { Card } from "../components/ui/Card";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Skeleton } from "../components/ui/Skeleton";
 import { StatCard, STAT_TONE_CLASSES, type StatTone } from "../components/ui/StatCard";
+import { VerdictBanner } from "../components/ui/VerdictBanner";
 import {
   AgentIcon,
   ApprovalsIcon,
   ArrowRightIcon,
   BrandMark,
+  CheckIcon,
   ClockIcon,
   InboxIcon,
   MoonIcon,
@@ -27,6 +30,7 @@ import {
   SunsetIcon,
   TestSuitesIcon,
   ToolsIcon,
+  WarningIcon,
 } from "../components/ui/icons";
 import {
   clearToken,
@@ -36,6 +40,7 @@ import {
   getRecentSuiteRuns,
   getVerdictDistribution,
   listActivity,
+  listApprovals,
   type ActivityEventRead,
   type SuiteRunSummary,
 } from "../lib/api";
@@ -153,6 +158,47 @@ function activityTone(event: ActivityEventRead): StatTone {
     default:
       return "orange";
   }
+}
+
+interface AttentionItem {
+  count: number;
+  label: string;
+  href: string;
+}
+
+/** Every count here comes from data this page already fetches for other
+ * widgets (DashboardStats' release_gate_holds, the same pending-approvals
+ * call AppShell's notification bell makes, and the already-fetched
+ * recent-activity feed's own real event_metadata.fail_count) — nothing
+ * new is queried and nothing is invented to fill this cluster. */
+function attentionItems(
+  releaseHolds: number,
+  pendingApprovals: number,
+  recentFailedRuns: number,
+): AttentionItem[] {
+  const items: AttentionItem[] = [];
+  if (releaseHolds > 0) {
+    items.push({
+      count: releaseHolds,
+      label: `release gate${releaseHolds === 1 ? "" : "s"} on hold`,
+      href: "/release-gate",
+    });
+  }
+  if (pendingApprovals > 0) {
+    items.push({
+      count: pendingApprovals,
+      label: `approval${pendingApprovals === 1 ? "" : "s"} awaiting review`,
+      href: "/approvals",
+    });
+  }
+  if (recentFailedRuns > 0) {
+    items.push({
+      count: recentFailedRuns,
+      label: `recent suite run${recentFailedRuns === 1 ? "" : "s"} with failures`,
+      href: "/runs",
+    });
+  }
+  return items;
 }
 
 function QuickAction({
@@ -309,6 +355,15 @@ export default function HomePage() {
     enabled: checkedAuth,
   });
 
+  // Same call AppShell's notification bell already makes — reused here,
+  // not a new endpoint, so the "needs attention" cluster below is built
+  // entirely from data the app already fetches elsewhere.
+  const pendingApprovalsQuery = useQuery({
+    queryKey: ["approvals", "pending"],
+    queryFn: () => listApprovals("pending"),
+    enabled: checkedAuth,
+  });
+
   const verdictQuery = useQuery({
     queryKey: ["dashboard", "verdict-distribution"],
     queryFn: getVerdictDistribution,
@@ -329,6 +384,14 @@ export default function HomePage() {
   if (!checkedAuth) return null;
 
   const displayName = userQuery.data?.full_name || userQuery.data?.email;
+
+  const attentionLoading = statsQuery.isLoading || pendingApprovalsQuery.isLoading || activityQuery.isLoading;
+  const releaseHolds = statsQuery.data?.release_gate_holds ?? 0;
+  const pendingApprovalsCount = pendingApprovalsQuery.data?.length ?? 0;
+  const recentFailedRuns = (activityQuery.data ?? []).filter(
+    (e) => e.event_type === "suite_run_completed" && Number(e.event_metadata.fail_count ?? 0) > 0,
+  ).length;
+  const attention = attentionItems(releaseHolds, pendingApprovalsCount, recentFailedRuns);
 
   return (
     <AppShell onLogout={handleLogout}>
@@ -383,7 +446,13 @@ export default function HomePage() {
           />
           <div className="relative flex flex-wrap items-center justify-between gap-6">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-ink-3">
+              {/* The app's one genuine "display" typography moment — every
+                  other page title in the product tops out at text-3xl;
+                  this is the only headline that goes larger, so Home
+                  reads as the control plane's front door, not just
+                  another page. */}
+              <p className="text-eyebrow text-accent">Control plane</p>
+              <div className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-ink-3">
                 {userQuery.isLoading || !timeOfDay ? (
                   <Skeleton className="h-3.5 w-40" />
                 ) : (
@@ -395,10 +464,10 @@ export default function HomePage() {
                   )
                 )}
               </div>
-              <h1 className="mt-1 text-2xl font-bold tracking-tight text-ink md:text-3xl">
+              <h1 className="text-display mt-1">
                 Build safer, more reliable <span className="text-accent">AI agents</span>
               </h1>
-              <p className="mt-2 max-w-lg text-sm text-ink-2">
+              <p className="text-body mt-2 max-w-lg">
                 AgentOps helps you evaluate, monitor and release AI agents with confidence.
               </p>
             </div>
@@ -434,50 +503,84 @@ export default function HomePage() {
           </div>
         </div>
 
+        {/* ---- Needs attention -----------------------------------------
+            The command-center's first real question: is anything wrong,
+            right now? Built entirely from three counts already fetched
+            for other widgets on this page (see attentionItems' own
+            comment) — never a fabricated health score. */}
+        <div className="mt-6">
+          {attentionLoading ? (
+            <Skeleton className="h-16" />
+          ) : attention.length === 0 ? (
+            <VerdictBanner tone="success" icon={<CheckIcon />} headline="All clear — nothing needs attention" />
+          ) : (
+            <VerdictBanner
+              tone={releaseHolds > 0 || recentFailedRuns > 0 ? "danger" : "warning"}
+              icon={<WarningIcon />}
+              headline="Needs attention"
+              reason={
+                <ul className="mt-1 flex flex-col gap-1">
+                  {attention.map((item) => (
+                    <li key={item.href}>
+                      <Link href={item.href} className="underline hover:no-underline">
+                        {item.count} {item.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              }
+            />
+          )}
+        </div>
+
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
           <div className="flex flex-col gap-6">
-            {/* ---- Stat tiles ------------------------------------------ */}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <StatCard
-                icon={<ProjectsIcon width={11} height={11} />}
-                label="Total projects"
-                value={statsQuery.data?.total_projects}
-                loading={statsQuery.isLoading}
-                isError={statsQuery.isError}
-                index={0}
-                tone="orange"
-                href="/projects"
-              />
-              <StatCard
-                icon={<AgentIcon width={11} height={11} />}
-                label="Agents"
-                value={statsQuery.data?.total_agents}
-                loading={statsQuery.isLoading}
-                isError={statsQuery.isError}
-                index={1}
-                tone="teal"
-                href="/agents"
-              />
-              <StatCard
-                icon={<RunsIcon width={11} height={11} />}
-                label="Total suite runs"
-                value={statsQuery.data?.total_suite_runs}
-                loading={statsQuery.isLoading}
-                isError={statsQuery.isError}
-                index={2}
-                tone="purple"
-                href="/runs"
-              />
-              <StatCard
-                icon={<ReleaseIcon width={11} height={11} />}
-                label="Release gate holds"
-                value={statsQuery.data?.release_gate_holds}
-                loading={statsQuery.isLoading}
-                isError={statsQuery.isError}
-                index={3}
-                tone="pink"
-                href="/release-gate"
-              />
+            {/* ---- Core metrics — demoted below the attention signal,
+                not the first thing seen. ---------------------------- */}
+            <div>
+              <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Core metrics</p>
+              <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <StatCard
+                  icon={<ProjectsIcon width={11} height={11} />}
+                  label="Total projects"
+                  value={statsQuery.data?.total_projects}
+                  loading={statsQuery.isLoading}
+                  isError={statsQuery.isError}
+                  index={0}
+                  tone="orange"
+                  href="/projects"
+                />
+                <StatCard
+                  icon={<AgentIcon width={11} height={11} />}
+                  label="Agents"
+                  value={statsQuery.data?.total_agents}
+                  loading={statsQuery.isLoading}
+                  isError={statsQuery.isError}
+                  index={1}
+                  tone="teal"
+                  href="/agents"
+                />
+                <StatCard
+                  icon={<RunsIcon width={11} height={11} />}
+                  label="Total suite runs"
+                  value={statsQuery.data?.total_suite_runs}
+                  loading={statsQuery.isLoading}
+                  isError={statsQuery.isError}
+                  index={2}
+                  tone="purple"
+                  href="/runs"
+                />
+                <StatCard
+                  icon={<ReleaseIcon width={11} height={11} />}
+                  label="Release gate holds"
+                  value={statsQuery.data?.release_gate_holds}
+                  loading={statsQuery.isLoading}
+                  isError={statsQuery.isError}
+                  index={3}
+                  tone="pink"
+                  href="/release-gate"
+                />
+              </div>
             </div>
 
             {/* ---- Recent Suite Runs ------------------------------------ */}
@@ -681,7 +784,10 @@ export default function HomePage() {
                         {ACTIVITY_ICON[event.event_type] ?? <InboxIcon />}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-ink">{event.title}</p>
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          {eventBadge(event)}
+                          <p className="truncate text-sm font-medium text-ink">{event.title}</p>
+                        </div>
                         {event.description && (
                           <p className="mt-0.5 line-clamp-2 text-xs text-ink-3">
                             {event.description}

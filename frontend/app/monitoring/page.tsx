@@ -13,6 +13,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { Field } from "../components/ui/Input";
 import { Skeleton } from "../components/ui/Skeleton";
 import { MonitoringIcon } from "../components/ui/icons";
+import { PageHeader } from "../components/ui/PageHeader";
 import {
   ApiError,
   clearToken,
@@ -117,12 +118,10 @@ export default function MonitoringEntryPage() {
   return (
     <AppShell onLogout={handleLogout}>
       <div className="animate-fade-in-up mx-auto w-full max-w-3xl px-4 py-7 md:px-8">
-        <h1 className="text-3xl font-bold tracking-tight text-ink">Monitoring</h1>
-        <p className="mt-1.5 text-sm text-ink-2">
-          Post-release execution evidence for an Agent Version — safety, tool trajectory, schema,
-          latency and grounding evidence evaluated from what the agent actually reported, plus any
-          regression-candidate test cases proposed from a real failure.
-        </p>
+        <PageHeader
+          title="Monitoring"
+          description="Post-release execution evidence for an Agent Version — safety, tool trajectory, schema, latency and grounding evidence evaluated from what the agent actually reported, plus any regression-candidate test cases proposed from a real failure."
+        />
 
         <div className="mt-6">
           {isLoading && (

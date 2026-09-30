@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../components/AppShell";
 import { Card } from "../components/ui/Card";
 import { EmptyState } from "../components/ui/EmptyState";
+import { PageHeader } from "../components/ui/PageHeader";
 import { StatCard } from "../components/ui/StatCard";
 import { CheckIcon, CostIcon, RunsIcon } from "../components/ui/icons";
 import { ApiError, clearToken, getCostDashboard, type ModelGroupStats } from "../lib/api";
@@ -62,7 +63,7 @@ function UsageDonut({ stats }: { stats: ModelGroupStats[] }) {
 
   return (
     <Card elevation="raised">
-      <p className="text-xs font-medium uppercase tracking-wide text-ink-3">Usage by agent</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-3">Usage by agent</p>
       <div className="mt-4 flex items-center gap-5">
         <div
           className="h-28 w-28 shrink-0 rounded-full"
@@ -99,7 +100,7 @@ function UsageBars({ stats }: { stats: ModelGroupStats[] }) {
 
   return (
     <Card elevation="raised">
-      <p className="text-xs font-medium uppercase tracking-wide text-ink-3">Usage by model</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-3">Usage by model</p>
       <ul className="mt-4 flex flex-col gap-3">
         {groups.map((g, i) => (
           <li key={g.label}>
@@ -146,12 +147,16 @@ export default function CostDashboardPage() {
   return (
     <AppShell onLogout={handleLogout}>
       <div className="animate-fade-in-up mx-auto w-full max-w-5xl px-4 py-7 md:px-8">
-        <h1 className="text-3xl font-bold tracking-tight text-ink">Cost</h1>
-        <p className="mt-1.5 max-w-2xl text-sm text-ink-2">
-          Spend per agent/model, from the model-call audit log. This project runs on the Gemini
-          Free Tier — nothing here is billed. Figures are litellm&apos;s notional per-token
-          estimate for the model actually used, useful for spotting relative cost/volume patterns.
-        </p>
+        <PageHeader
+          title="Cost"
+          description={
+            <>
+              Spend per agent/model, from the model-call audit log. This project runs on the Gemini
+              Free Tier — nothing here is billed. Figures are litellm&apos;s notional per-token
+              estimate for the model actually used, useful for spotting relative cost/volume patterns.
+            </>
+          }
+        />
 
         {costQuery.isError && (
           <p className="mt-6 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">

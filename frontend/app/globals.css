@@ -392,6 +392,112 @@
   }
 }
 
+/* ---- Typography tokens -------------------------------------------------
+   Named semantic tiers for the type hierarchy that was previously only a
+   convention (the exact same Tailwind chain hand-typed identically at
+   every call site — confirmed by grep audit: 27/27 non-exempt page
+   titles already used one identical string). These classes change
+   nothing visually (every value below is copied from the convention
+   they replace) — the point is that "page title" or "metric value" is
+   now a named, reusable rule instead of a string every file had to
+   retype correctly. Colors are left unset where a caller already
+   supplies one via a Tailwind text-* utility (metric value's tone
+   colors, eyebrow's accent variant) so composition still works exactly
+   as before; only the mechanics (size/weight/tracking/transform) are
+   centralized here. ---------------------------------------------------- */
+
+.text-display {
+  font-size: 1.875rem; /* text-3xl */
+  line-height: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+@media (min-width: 768px) {
+  .text-display {
+    font-size: 2.25rem; /* md:text-4xl */
+    line-height: 2.5rem;
+  }
+}
+
+.text-page-title {
+  font-size: 1.875rem; /* text-3xl */
+  line-height: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+
+.text-section-title {
+  font-size: 0.75rem; /* text-xs */
+  line-height: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.025em; /* tracking-wide */
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Same mechanics as section-title — the eyebrow is the identical visual
+   tier used above a headline instead of above a block of content; kept
+   as a separate name (not an alias) because the two tiers mean
+   different things even though they render the same, and a caller
+   layering `text-accent` on top (Home's "Control plane" eyebrow) should
+   read as an intentional override, not a fight with a shared class. */
+.text-eyebrow {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.text-card-title {
+  font-size: 0.875rem; /* text-sm */
+  line-height: 1.25rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.text-body {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--ink-2);
+}
+
+.text-body-muted {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--ink-3);
+}
+
+/* Color intentionally unset — every metric already applies a semantic
+   tone (success/warning/danger/neutral) via Badge.tsx's Tone map on top
+   of this class; hardcoding a color here would fight that. */
+.text-metric-value {
+  font-size: 1.5rem; /* text-2xl */
+  line-height: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.text-metric-label {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Size/color only — pair with Tailwind's own `font-mono` utility for the
+   monospace family itself, rather than duplicating Tailwind's default
+   mono font stack here. */
+.text-data {
+  font-size: 0.6875rem; /* text-[11px] */
+  color: var(--ink-2);
+}
+
 /* ---- Base ------------------------------------------------------------- */
 
 html {

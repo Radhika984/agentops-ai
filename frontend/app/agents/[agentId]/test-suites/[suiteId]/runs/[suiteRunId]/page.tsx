@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,9 +9,10 @@ import { Badge, type Tone } from "../../../../../../components/ui/Badge";
 import { Button } from "../../../../../../components/ui/Button";
 import { Card } from "../../../../../../components/ui/Card";
 import { EmptyState } from "../../../../../../components/ui/EmptyState";
+import { MetricCard } from "../../../../../../components/ui/MetricCard";
 import { Skeleton } from "../../../../../../components/ui/Skeleton";
-import { StatusLabel } from "../../../../../../components/ui/Status";
-import { ChevronLeftIcon, VerifyIcon } from "../../../../../../components/ui/icons";
+import { VerdictBanner } from "../../../../../../components/ui/VerdictBanner";
+import { CheckIcon, ChevronLeftIcon, ClockIcon, CloseIcon, VerifyIcon, WarningIcon } from "../../../../../../components/ui/icons";
 import {
   ApiError,
   clearToken,
@@ -43,29 +44,43 @@ function verdictTone(verdict: Verdict): Tone {
   return "warning";
 }
 
+interface RunBanner {
+  tone: Tone;
+  icon: ReactNode;
+  headline: string;
+}
+
+/** The run's one dominant verdict moment — derived entirely from fields
+ * already fetched (run.status while in flight, then the real
+ * pass/fail/inconclusive counts once terminal). SuiteRun has no single
+ * "verdict" field of its own, so this is computed from the same counts
+ * the MetricCard grid below already displays, never a new number. */
+function runBanner(run: { status: SuiteRunStatus; fail_count: number; inconclusive_count: number; pass_count: number }): RunBanner {
+  if (run.status === "failed") {
+    return { tone: "danger", icon: <CloseIcon />, headline: "RUN FAILED — did not complete" };
+  }
+  if (run.status !== "completed") {
+    return { tone: statusTone(run.status), icon: <ClockIcon />, headline: run.status.toUpperCase() };
+  }
+  if (run.fail_count > 0) {
+    return { tone: "danger", icon: <CloseIcon />, headline: `FAIL — ${run.fail_count} test case${run.fail_count === 1 ? "" : "s"} failed` };
+  }
+  if (run.inconclusive_count > 0) {
+    return {
+      tone: "warning",
+      icon: <WarningIcon />,
+      headline: `INCONCLUSIVE — ${run.inconclusive_count} test case${run.inconclusive_count === 1 ? "" : "s"} need review`,
+    };
+  }
+  return { tone: "success", icon: <CheckIcon />, headline: `PASS — all ${run.pass_count} test cases passed` };
+}
+
 function formatMs(ms: number): string {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
 }
 
 function formatTimestamp(value: string | null): string {
   return value ? new Date(value).toLocaleString() : "—";
-}
-
-const METRIC_VALUE_TONE: Record<Tone, string> = {
-  neutral: "text-ink",
-  success: "text-success",
-  warning: "text-warning",
-  danger: "text-danger",
-  accent: "text-accent",
-};
-
-function MetricCard({ label, value, tone = "neutral" }: { label: string; value: string; tone?: Tone }) {
-  return (
-    <Card elevation="raised">
-      <p className="text-xs font-medium tracking-wide text-ink-3 uppercase">{label}</p>
-      <p className={`mt-2 text-2xl font-bold tracking-tight ${METRIC_VALUE_TONE[tone]}`}>{value}</p>
-    </Card>
-  );
 }
 
 /** A short, factual summary of what's notable about a result's checks —
@@ -167,6 +182,7 @@ export default function SuiteRunDetailPage() {
   const caseNameById = new Map((casesQuery.data ?? []).map((c) => [c.id, c.name]));
   const results = resultsQuery.data ?? [];
   const isPolling = run !== undefined && !TERMINAL_STATUSES.includes(run.status);
+  const banner = run ? runBanner(run) : null;
 
   const breadcrumb = (
     <div className="min-w-0">
@@ -201,20 +217,20 @@ export default function SuiteRunDetailPage() {
 
         {run && (
           <>
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <StatusLabel tone={statusTone(run.status)} pulse={isPolling}>
-                  {run.status}
-                </StatusLabel>
-                <span className="text-sm text-ink-2">
-                  {version ? version.label : run.agent_version_id}
-                  {version?.is_baseline && (
-                    <Badge tone="accent">
-                      <span className="ml-1">baseline</span>
-                    </Badge>
-                  )}
-                </span>
-              </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <VerdictBanner
+                className="flex-1"
+                tone={banner!.tone}
+                icon={banner!.icon}
+                headline={banner!.headline}
+                reason={
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {version ? version.label : run.agent_version_id}
+                    {version?.is_baseline && <Badge tone="accent">baseline</Badge>}
+                    {isPolling && <span className="text-ink-3">· updating live…</span>}
+                  </span>
+                }
+              />
 
               {TERMINAL_STATUSES.includes(run.status) && (
                 <div className="flex flex-wrap gap-2">

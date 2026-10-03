@@ -9,7 +9,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const base =
-  "inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0 disabled:active:scale-100";
+  "inline-flex items-center justify-center gap-1.5 rounded-control font-medium transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0 disabled:active:scale-100";
 
 const variants: Record<Variant, string> = {
   // The hover shadow uses a fixed warm-accent color (not var(--accent)),

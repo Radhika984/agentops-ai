@@ -4,7 +4,7 @@ import type { ReactNode, SelectHTMLAttributes } from "react";
 // why backdrop-blur-md is here — the light theme's bg-surface is opaque
 // so it's inert there, the dark .app-canvas theme's is translucent).
 const selectClasses =
-  "w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-ink backdrop-blur-md transition-all duration-150 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/15 disabled:opacity-50";
+  "w-full rounded-control border border-line-strong bg-surface px-3 py-2 text-sm text-ink backdrop-blur-md transition-all duration-150 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/15 disabled:opacity-50";
 
 interface SelectFieldProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: ReactNode;

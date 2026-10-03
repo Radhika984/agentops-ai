@@ -210,6 +210,87 @@ export function ClockIcon(props: IconProps) {
   );
 }
 
+/** Status-vocabulary marks (STATUS_META in ui/Status.tsx) — each status
+ * gets a distinct OUTER SHAPE (circle / octagon / dashed circle / shield
+ * / square), not just a different inner glyph, so two statuses are never
+ * distinguishable by color alone. */
+export function CheckCircleIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="9" cy="9" r="6.5" />
+      <path d="M6 9.2 8.1 11.3 12.2 6.8" />
+    </svg>
+  );
+}
+
+export function XCircleIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="9" cy="9" r="6.5" />
+      <path d="M6.8 6.8 11.2 11.2M11.2 6.8 6.8 11.2" />
+    </svg>
+  );
+}
+
+/** HOLD — an octagon (the universal "stop and check" shape) with a pause
+ * glyph inside, deliberately distinct from FAIL's circle+X in both outer
+ * shape and inner mark, never just a different color on the same shape. */
+export function PauseOctagonIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6.2 2.5h5.6L15.5 6.2v5.6L11.8 15.5H6.2L2.5 11.8V6.2Z" />
+      <path d="M7.2 6.5v5M10.8 6.5v5" />
+    </svg>
+  );
+}
+
+/** INCONCLUSIVE — a circle bisected by a diameter line ("some evidence
+ * either way, no clear verdict"), distinct from the dashed ring used for
+ * INSUFFICIENT EVIDENCE ("no usable evidence at all"). */
+export function HalfCircleIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="9" cy="9" r="6.5" />
+      <path d="M9 2.5v13" />
+    </svg>
+  );
+}
+
+/** INSUFFICIENT EVIDENCE — a dashed, incomplete ring: there isn't enough
+ * signal to draw a solid conclusion, shown structurally rather than only
+ * through color. */
+export function DashedCircleIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="9" cy="9" r="6.5" strokeDasharray="2.4 2.6" />
+      <circle cx="9" cy="9" r="0.4" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/** APPROVED — SafetyIcon's shield outline plus a check, reused
+ * deliberately (a human decision that clears something to proceed is the
+ * same idea as "safe to proceed"). */
+export function ShieldCheckIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M9 2.3 15 4.6v4.2c0 3.6-2.6 6.5-6 7.4-3.4-.9-6-3.8-6-7.4V4.6Z" />
+      <path d="M6.2 9 8.1 10.9 11.8 7.2" />
+    </svg>
+  );
+}
+
+/** REJECTED — a square (not a circle) with an X, so it reads as visually
+ * distinct from FAIL's circle+X at a glance, not just a color swap. */
+export function XSquareIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="2.3" y="2.3" width="13.4" height="13.4" rx="3" />
+      <path d="M6.8 6.8 11.2 11.2M11.2 6.8 6.8 11.2" />
+    </svg>
+  );
+}
+
 /** Evaluation-pipeline stage marks (landing hero + run panel), each a
  * small distinct glyph rather than a single reused dot — Goal, Plan,
  * Tools, Safety, Verify, Release. */

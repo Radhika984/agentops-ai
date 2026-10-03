@@ -5,6 +5,7 @@ import { Badge } from "./ui/Badge";
 import { Card } from "./ui/Card";
 import { EmptyState } from "./ui/EmptyState";
 import { Skeleton } from "./ui/Skeleton";
+import { StatusBadge } from "./ui/Status";
 import { ApiError, AUTOFIX_OPTION_LABEL, listActivity, type ActivityEventRead } from "../lib/api";
 
 function readString(metadata: Record<string, unknown>, key: string): string | null {
@@ -22,18 +23,21 @@ function readString(metadata: Record<string, unknown>, key: string): string | nu
 export function eventBadge(event: ActivityEventRead) {
   if (event.event_type === "release_gate_evaluated") {
     const decision = readString(event.event_metadata, "decision");
-    if (decision === "pass") return <Badge tone="success">PASS</Badge>;
-    if (decision === "hold") return <Badge tone="danger">HOLD</Badge>;
+    if (decision === "pass") return <StatusBadge status="PASS" />;
+    if (decision === "hold") return <StatusBadge status="HOLD" />;
     return null;
   }
   if (event.event_type === "autofix_proposed") {
     const option = readString(event.event_metadata, "option");
     if (!option) return null;
-    // approval_id present ⇒ requires human approval (options 1–3);
-    // absent ⇒ owner_suggestion, recorded with no approval needed.
+    // approval_id present ⇒ requires human approval (options 1–3) — the
+    // same real "needs a decision" state as an approval queue entry, so
+    // it borrows PENDING's accent treatment rather than amber (amber is
+    // reserved for soft/advisory signals, and a gating decision isn't
+    // one); absent ⇒ owner_suggestion, recorded with no approval needed.
     const requiresApproval = readString(event.event_metadata, "approval_id") !== null;
     return (
-      <Badge tone={requiresApproval ? "warning" : "neutral"}>
+      <Badge tone={requiresApproval ? "accent" : "neutral"}>
         {AUTOFIX_OPTION_LABEL[option as keyof typeof AUTOFIX_OPTION_LABEL] ?? option}
       </Badge>
     );

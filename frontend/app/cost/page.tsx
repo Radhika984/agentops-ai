@@ -184,7 +184,6 @@ export default function CostDashboardPage() {
             loading={costQuery.isLoading}
             isError={costQuery.isError}
             index={0}
-            tone="orange"
           />
           <StatCard
             icon={<CheckIcon width={11} height={11} />}
@@ -194,7 +193,6 @@ export default function CostDashboardPage() {
             loading={costQuery.isLoading}
             isError={costQuery.isError}
             index={1}
-            tone="teal"
           />
           <StatCard
             icon={<CostIcon width={11} height={11} />}
@@ -204,7 +202,6 @@ export default function CostDashboardPage() {
             loading={costQuery.isLoading}
             isError={costQuery.isError}
             index={2}
-            tone="purple"
           />
         </div>
 

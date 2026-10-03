@@ -8,7 +8,7 @@ import { EyeIcon, EyeOffIcon } from "./icons";
 // the dark .app-canvas theme — see globals.css) so the search field and
 // every form input read as frosted glass on the dashboard, not a flat box.
 const inputClasses =
-  "w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 backdrop-blur-md transition-all duration-150 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/15 disabled:opacity-50";
+  "w-full rounded-control border border-line-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 backdrop-blur-md transition-all duration-150 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/15 disabled:opacity-50";
 
 interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: ReactNode;

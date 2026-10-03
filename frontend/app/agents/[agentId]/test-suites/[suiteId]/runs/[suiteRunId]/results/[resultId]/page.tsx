@@ -10,8 +10,9 @@ import { Button } from "../../../../../../../../components/ui/Button";
 import { CodeBlock, Disclosure, LabeledCodeBlock } from "../../../../../../../../components/ui/CodeDisclosure";
 import { Skeleton } from "../../../../../../../../components/ui/Skeleton";
 import { FlowSteps, type FlowStep } from "../../../../../../../../components/ui/FlowSteps";
+import { STATUS_META, StatusBadge, type StatusKey } from "../../../../../../../../components/ui/Status";
 import { VerdictBanner } from "../../../../../../../../components/ui/VerdictBanner";
-import { CheckIcon, ChevronLeftIcon, CloseIcon, WarningIcon } from "../../../../../../../../components/ui/icons";
+import { ChevronLeftIcon, WarningIcon } from "../../../../../../../../components/ui/icons";
 import {
   ApiError,
   AUTOFIX_OPTION_LABEL,
@@ -27,16 +28,12 @@ import {
   type RCATier,
   type TestCaseRead,
   type TrialEntry,
-  type Verdict,
 } from "../../../../../../../../lib/api";
 import { useRequireAuth } from "../../../../../../../../lib/useRequireAuth";
 
-function verdictTone(verdict: Verdict): Tone {
-  if (verdict === "PASS") return "success";
-  if (verdict === "FAIL") return "danger";
-  return "warning";
-}
-
+// Per-check status (EvaluationCheck.status) is a finer-grained diagnostic
+// taxonomy than the top-level PASS/FAIL/INCONCLUSIVE verdict — it stays
+// on its own tone mapping (a check row is detail, not "the" verdict).
 function checkTone(status: EvaluationCheck["status"]): Tone {
   if (status === "pass") return "success";
   if (status === "fail") return "danger";
@@ -52,12 +49,6 @@ function formatOutput(value: unknown): string {
   if (value === null || value === undefined) return "(no output)";
   if (typeof value === "string") return value;
   return JSON.stringify(value, null, 2);
-}
-
-function verdictIcon(verdict: Verdict) {
-  if (verdict === "PASS") return <CheckIcon />;
-  if (verdict === "FAIL") return <CloseIcon />;
-  return <WarningIcon />;
 }
 
 function AssertionChip({ assertion }: { assertion: Assertion }) {
@@ -167,7 +158,7 @@ function TrialCard({ trial }: { trial: TrialEntry }) {
       meta={
         <>
           {trial.llm_judge_invoked && <Badge tone="accent">LLM judge</Badge>}
-          <Badge tone={verdictTone(trial.verdict)}>{trial.verdict}</Badge>
+          <StatusBadge status={trial.verdict as StatusKey} />
         </>
       }
     >
@@ -207,14 +198,16 @@ function TrialCard({ trial }: { trial: TrialEntry }) {
 function tierTone(tier: RCATier): Tone {
   if (tier === "deterministic") return "success";
   if (tier === "llm_hypothesis") return "accent";
-  if (tier === "insufficient_evidence") return "warning";
+  // Matches the shared STATUS_META.INSUFFICIENT_EVIDENCE vocabulary —
+  // neutral, never amber, per the design brief's status-language rule.
+  if (tier === "insufficient_evidence") return STATUS_META.INSUFFICIENT_EVIDENCE.tone;
   return "neutral"; // not_applicable
 }
 
 function tierLabel(tier: RCATier): string {
   if (tier === "deterministic") return "Deterministic";
   if (tier === "llm_hypothesis") return "LLM hypothesis";
-  if (tier === "insufficient_evidence") return "Insufficient evidence";
+  if (tier === "insufficient_evidence") return STATUS_META.INSUFFICIENT_EVIDENCE.label;
   return "Not applicable";
 }
 
@@ -517,6 +510,7 @@ export default function TestCaseResultDetailPage() {
 
   const result = resultQuery.data;
   const testCase = casesQuery.data?.find((c) => c.id === result?.test_case_id);
+  const verdictMeta = result ? STATUS_META[result.verdict as StatusKey] : null;
 
   const breadcrumb = (
     <div className="min-w-0">
@@ -551,12 +545,12 @@ export default function TestCaseResultDetailPage() {
           </p>
         )}
 
-        {result && (
+        {result && verdictMeta && (
           <div className="mt-6 flex flex-col gap-5">
             {/* VERDICT — the dominant moment, before anything else. */}
             <VerdictBanner
-              tone={verdictTone(result.verdict)}
-              icon={verdictIcon(result.verdict)}
+              tone={verdictMeta.tone}
+              icon={<verdictMeta.icon />}
               headline={`${result.verdict} — via ${result.verdict_method}`}
               reason={
                 result.trials.length > 0

@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# design audit screenshots (Phase 0 harness output — not shipped)
+/.design-shots/

@@ -11,8 +11,9 @@ import { Card } from "../../../../../../components/ui/Card";
 import { EmptyState } from "../../../../../../components/ui/EmptyState";
 import { MetricCard } from "../../../../../../components/ui/MetricCard";
 import { Skeleton } from "../../../../../../components/ui/Skeleton";
+import { STATUS_META, StatusBadge, type StatusKey } from "../../../../../../components/ui/Status";
 import { VerdictBanner } from "../../../../../../components/ui/VerdictBanner";
-import { CheckIcon, ChevronLeftIcon, ClockIcon, CloseIcon, VerifyIcon, WarningIcon } from "../../../../../../components/ui/icons";
+import { ChevronLeftIcon, ClockIcon, VerifyIcon } from "../../../../../../components/ui/icons";
 import {
   ApiError,
   clearToken,
@@ -23,25 +24,22 @@ import {
   listTestCases,
   type SuiteRunStatus,
   type TestCaseResultRead,
-  type Verdict,
 } from "../../../../../../lib/api";
 import { useRequireAuth } from "../../../../../../lib/useRequireAuth";
 
 const TERMINAL_STATUSES: SuiteRunStatus[] = ["completed", "failed"];
 const POLL_INTERVAL_MS = 1500;
 
+// Only the run's in-flight lifecycle status lives outside the
+// STATUS_META verdict vocabulary — once terminal, the run's real
+// pass/fail/inconclusive counts drive a genuine STATUS_META verdict
+// instead (see runBanner below).
 function statusTone(status: SuiteRunStatus): Tone {
   if (status === "completed") return "success";
   if (status === "failed") return "danger";
   if (status === "cancelling") return "warning";
   if (status === "running") return "accent";
   return "neutral";
-}
-
-function verdictTone(verdict: Verdict): Tone {
-  if (verdict === "PASS") return "success";
-  if (verdict === "FAIL") return "danger";
-  return "warning";
 }
 
 interface RunBanner {
@@ -52,27 +50,32 @@ interface RunBanner {
 
 /** The run's one dominant verdict moment — derived entirely from fields
  * already fetched (run.status while in flight, then the real
- * pass/fail/inconclusive counts once terminal). SuiteRun has no single
- * "verdict" field of its own, so this is computed from the same counts
- * the MetricCard grid below already displays, never a new number. */
+ * pass/fail/inconclusive counts once terminal, via STATUS_META). SuiteRun
+ * has no single "verdict" field of its own, so this is computed from the
+ * same counts the MetricCard grid below already displays, never a new
+ * number. */
 function runBanner(run: { status: SuiteRunStatus; fail_count: number; inconclusive_count: number; pass_count: number }): RunBanner {
   if (run.status === "failed") {
-    return { tone: "danger", icon: <CloseIcon />, headline: "RUN FAILED — did not complete" };
+    const meta = STATUS_META.FAIL;
+    return { tone: meta.tone, icon: <meta.icon />, headline: "RUN FAILED — did not complete" };
   }
   if (run.status !== "completed") {
     return { tone: statusTone(run.status), icon: <ClockIcon />, headline: run.status.toUpperCase() };
   }
   if (run.fail_count > 0) {
-    return { tone: "danger", icon: <CloseIcon />, headline: `FAIL — ${run.fail_count} test case${run.fail_count === 1 ? "" : "s"} failed` };
+    const meta = STATUS_META.FAIL;
+    return { tone: meta.tone, icon: <meta.icon />, headline: `FAIL — ${run.fail_count} test case${run.fail_count === 1 ? "" : "s"} failed` };
   }
   if (run.inconclusive_count > 0) {
+    const meta = STATUS_META.INCONCLUSIVE;
     return {
-      tone: "warning",
-      icon: <WarningIcon />,
+      tone: meta.tone,
+      icon: <meta.icon />,
       headline: `INCONCLUSIVE — ${run.inconclusive_count} test case${run.inconclusive_count === 1 ? "" : "s"} need review`,
     };
   }
-  return { tone: "success", icon: <CheckIcon />, headline: `PASS — all ${run.pass_count} test cases passed` };
+  const meta = STATUS_META.PASS;
+  return { tone: meta.tone, icon: <meta.icon />, headline: `PASS — all ${run.pass_count} test cases passed` };
 }
 
 function formatMs(ms: number): string {
@@ -225,7 +228,7 @@ export default function SuiteRunDetailPage() {
                 headline={banner!.headline}
                 reason={
                   <span className="flex flex-wrap items-center gap-1.5">
-                    {version ? version.label : run.agent_version_id}
+                    <code className="font-mono">{version ? version.label : run.agent_version_id}</code>
                     {version?.is_baseline && <Badge tone="accent">baseline</Badge>}
                     {isPolling && <span className="text-ink-3">· updating live…</span>}
                   </span>
@@ -355,7 +358,7 @@ export default function SuiteRunDetailPage() {
                             className="cursor-pointer border-b border-line text-ink-2 transition-colors duration-150 last:border-b-0 hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none"
                           >
                             <td className="px-4 py-2.5">
-                              <Badge tone={verdictTone(result.verdict)}>{result.verdict}</Badge>
+                              <StatusBadge status={result.verdict as StatusKey} />
                             </td>
                             <td className="px-4 py-2.5 text-ink">
                               {caseNameById.get(result.test_case_id) ?? result.test_case_id}

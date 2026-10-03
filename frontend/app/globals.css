@@ -50,43 +50,38 @@
 
   /* ---- Shell (dark) surface family -------------------------------------
      A deliberate second surface, not a dark-mode toggle: the decorative
-     branding panels (landing hero, auth screens) and the authenticated
-     sidebar both draw from this deep espresso/charcoal family (never pure
-     black) against the warm-light tokens above used everywhere else.
+     pre-auth branding panels (landing hero, auth screens) draw from this
+     deep espresso/charcoal family (never pure black) against the
+     warm-light tokens above used everywhere else. Their sense of depth
+     comes from .bg-radial-glow / .bg-technical-grid-dark, not a lighter
+     base.
 
-     --shell-bg/--shell-surface are the PANEL pair (landing page right
-     panel, AuthBranding) — kept at their original depth so those panels
-     read as dark/premium; their sense of depth comes from
-     .bg-radial-glow / .bg-technical-grid-dark, not from a lighter base.
+     The v2 "Espresso Ink" redesign decoupled AppShell's sidebar from
+     this family entirely (it used to share --shell-sidebar-bg/
+     --shell-surface-2/--shell-sidebar-ink-2/-3 with these panels) — the
+     sidebar is now a plain child of `.app-canvas` and inherits that
+     scope's ink/accent/surface tokens directly, with only its own
+     background (--sidebar-bg, in the `.app-canvas` block below) still
+     dedicated. This block therefore only needs to serve the pre-auth
+     panels now.
 
-     --shell-sidebar-bg is a SEPARATE, lighter token used only by
-     AppShell's sidebar — sidebar readability and panel depth are
-     different concerns and are tuned independently, not through one
-     shared background value. --shell-surface-2 (the sidebar's own
-     hover/active surface, only ever used by AppShell) is tuned to sit
-     just above --shell-sidebar-bg. --shell-sidebar-ink-2/-3 are
-     sidebar-only text tones, lighter than the shared --shell-ink-2/-3
-     used by the landing/auth panels — kept separate so brightening the
-     sidebar's text never affects those panels.
-
-     Every pair below is checked at >=4.5:1 with a relative-luminance
-     script: against --shell-bg, shell-ink-3 is the tightest at 6.1:1;
-     against --shell-sidebar-bg, shell-sidebar-ink-3 is the tightest at
-     6.9:1 (the sidebar's own accent-on-bg pairing, only ever used
-     behind the accent-soft active-item pill, sits at 4.4:1). */
+     Checked at >=4.5:1 with a relative-luminance script: against
+     --shell-bg, shell-ink-3 is the tightest at 6.1:1. */
   --shell-bg: #221d19;
   --shell-surface: #2b241f;
-  --shell-sidebar-bg: #44372e;
-  --shell-surface-2: #504236;
   --shell-line: rgba(255, 255, 255, 0.08);
   --shell-line-strong: rgba(255, 255, 255, 0.14);
   --shell-ink: #f5efe6;
   --shell-ink-2: #cdc0ae;
   --shell-ink-3: #a89b87;
-  --shell-sidebar-ink-2: #f5efe6;
-  --shell-sidebar-ink-3: #e6dcce;
   --shell-accent: #e08a63;
   --shell-accent-soft: rgba(224, 138, 99, 0.16);
+
+  /* "Espresso Ink" redesign (v2 brief) — a single premium-moment hairline
+     color, used only for the Release Gate verdict frame and matching
+     focus treatment (Phase 2). Defined here (not inside `.app-canvas`)
+     since it's a plain constant, not a themed value. */
+  --gold: #c9a66b;
 }
 
 /* Deliberately no `@media (prefers-color-scheme: dark)` override: the
@@ -117,148 +112,145 @@
    were calibrated for a pale background and read as muddy/low-contrast
    on an espresso one. */
 .app-canvas {
-  /* Reference-fidelity correction: the first two passes of this theme
-     derived every surface (background/surface/surface-2/elevated/glass)
-     from the SAME warm-brown hue as the accent color, just at
-     progressively lower opacity — which is exactly why the whole app
-     read as "brown everywhere" instead of matching the reference's
-     actual material: a neutral, near-black charcoal base (the faintest
-     cool/blue-gray cast, not warm) with the brown/orange/peach warmth
-     appearing ONLY in specific decorative roles — ambient glow blobs,
-     icon chips, the active nav item, the primary CTA. Base surfaces
-     below are now hue-neutral (desaturated, barely-there cool cast);
-     every warm color in the app still exists, just scoped to --accent
-     and the new categorical --stat-* tokens below, never smeared across
-     --surface/--background itself. */
-  /* Pushed a step further toward a genuine navy-black (not just
-     desaturated neutral) so the main-content card surfaces read as
-     clearly distinct from the sidebar's warm brown when seen side by
-     side — the specific "brown sidebar + navy dashboard surfaces"
-     contrast the reference relies on, per its own explicit color-role
-     breakdown (brown = brand/sidebar, navy = dashboard surfaces). */
-  --background: #10121a;
-  --surface: rgba(22, 26, 39, 0.68);
-  --surface-2: rgba(26, 30, 45, 0.74);
-  --surface-elevated: rgba(30, 35, 52, 0.78);
-  --line: rgba(255, 255, 255, 0.09);
-  --line-strong: rgba(255, 255, 255, 0.18);
-  /* White/cool-gray text (not warm beige) — matches the reference's own
-     hierarchy: near-white headings, muted cool-gray body/metadata. */
-  --ink: #f6f5f3;
-  --ink-2: #b7b9c2;
-  --ink-3: #8b8d97;
+  /* ---- "Espresso Ink" (v2 redesign) --------------------------------
+     A warm, near-monochrome espresso-black canvas — cream ink, copper
+     used only for the primary CTA, active nav indicator, focus ring and
+     one emphasis per page. This deliberately replaces the previous
+     navy-black "generic dark SaaS" palette (v1's --background/#10121a
+     family): per the v2 brief, warm near-black dev-tool UIs are rare,
+     which is the point — it must not read as another navy/purple AI
+     dashboard. Every value below is a literal from the locked brief
+     except --ink-3, bumped from the brief's #8f826f to #9c8f7a to clear
+     4.5:1 against --surface-2 (measured ~3.75:1 at the original value). */
+  --background: #0e0b09;
+  --surface: #15110e;
+  --surface-2: #1c1713;
+  --surface-elevated: #241e18;
+  --line: rgba(244, 235, 221, 0.08);
+  --line-strong: rgba(244, 235, 221, 0.14);
+  --ink: #f4ebdd;
+  --ink-2: #b9ab98;
+  --ink-3: #9c8f7a;
 
-  --accent: #e08a63;
-  --accent-hover: #e79b78;
-  --accent-ink: #fdf9f4;
-  --accent-soft: rgba(224, 138, 99, 0.16);
+  /* Champagne/pale-gold accent (v3 "luxury editorial" direction) —
+     replaces v2's copper/orange. Deliberately NOT bright/mustard/neon:
+     a soft, diffused candlelight gold, used the same way copper was
+     (primary CTA, active nav indicator, focus ring, one emphasis per
+     page) — never as a decorative categorical color. */
+  --accent: #e8c77a;
+  --accent-hover: #f1d99b;
+  --accent-bright: #f8e8bf;
+  --accent-deep: #b8944f;
+  /* Dark ink on the pale-gold button, not cream-on-gold: gold's own
+     luminance is too high for cream text to clear 4.5:1, while a dark
+     espresso ink clears it comfortably. */
+  --accent-ink: #1c1713;
+  --accent-soft: rgba(232, 199, 122, 0.14);
 
-  --success: #7cc27a;
-  --success-soft: rgba(124, 194, 122, 0.14);
-  --warning: #e0a542;
-  --warning-soft: rgba(224, 165, 66, 0.14);
-  --danger: #e2597c;
-  --danger-soft: rgba(226, 89, 124, 0.14);
+  --success: #8db87a;
+  --success-soft: rgba(141, 184, 122, 0.16);
+  /* Advisory-only — never used for HOLD or any release-blocking state
+     (see components/ui/Status.tsx's STATUS_META). */
+  --warning: #e0b04a;
+  --warning-soft: rgba(224, 176, 74, 0.16);
+  --danger: #e5484d;
+  --danger-soft: rgba(229, 72, 77, 0.16);
 
-  /* Categorical (non-semantic) accent tones — used ONLY to give the four
-     Home dashboard stat cards distinct icon colors, matching the
-     reference's Total Projects/Agents/Total Suite Runs/Release Gate
-     Holds treatment. Never reused for PASS/FAIL/INCONCLUSIVE (those stay
-     --success/--warning/--danger) or for anything with a status meaning
-     — these are purely "which stat is this" color-coding. */
-  --stat-teal: #4bb8a8;
-  --stat-teal-soft: rgba(75, 184, 168, 0.16);
-  --stat-purple: #9c88f0;
-  --stat-purple-soft: rgba(156, 136, 240, 0.16);
-  --stat-pink: #e15a94;
-  --stat-pink-soft: rgba(225, 90, 148, 0.16);
+  --focus-ring: #e8c77a;
 
-  --focus-ring: #e08a63;
+  /* Jewel-tone category accents (v4 "cinematic command center" brief) —
+     deliberately a SEPARATE system from --accent (champagne stays the
+     hero/sidebar/lifecycle signature) and from STATUS_META's semantic
+     colors (success/warning/danger stay authoritative for PASS/FAIL/
+     HOLD/etc. everywhere — these are never reassigned to a status). Used
+     only as decorative per-category identity on metric cards, their
+     micro-charts/icons, and activity-row icon tints — "colored light
+     under dark glass," not filled blocks of color. */
+  /* Glyph/stroke color: bright enough to glow against dark glass. Soft:
+     a richer, more saturated tint for the icon CONTAINER itself (not a
+     pale wash) — "light behaves like it's coming from inside the card." */
+  --accent-violet: #a78bfa;
+  --accent-violet-rich: #8b5cf6;
+  --accent-violet-soft: rgba(139, 92, 246, 0.35);
+  --accent-blue: #60a5fa;
+  --accent-blue-rich: #3b82f6;
+  --accent-blue-soft: rgba(59, 130, 246, 0.35);
+  --accent-cyan: #22d3ee;
+  --accent-cyan-rich: #06b6d4;
+  --accent-cyan-soft: rgba(6, 182, 212, 0.35);
+  --accent-teal: #2dd4bf;
+  --accent-teal-rich: #14b8a6;
+  --accent-teal-soft: rgba(20, 184, 166, 0.35);
+  --accent-category-red: #f87171;
+  --accent-category-red-rich: #ef4444;
+  --accent-category-red-soft: rgba(239, 68, 68, 0.35);
 
-  --glass-bg: rgba(18, 22, 34, 0.58);
-  --glass-border: rgba(255, 255, 255, 0.12);
+  /* Sidebar-only background — "the same espresso family as the app, one
+     step lifted." Everything else the sidebar needs (ink, accent,
+     surface-2 for its active/hover states) reuses these same app-canvas
+     tokens directly via normal CSS inheritance (AppShell's <aside> is a
+     child of this element) rather than a parallel --shell-* token set,
+     so the sidebar and the app content can never visually drift apart. */
+  --sidebar-bg: #120e0b;
 
-  /* A dark canvas can't read an ordinary drop shadow as "lifted" the way
-     the light theme does (the shadow color, unlike the light theme's
-     warm-brown-on-ivory, would be nearly invisible against an
-     already-dark page) — so elevation instead comes from a subtle inset
-     top highlight (a glass-like "catching light" edge) paired with a
-     real, higher-opacity ambient shadow. Overriding the shared
-     --shadow-sm/md/lg tokens (rather than editing Card.tsx) means every
-     existing shadow-sm/md/lg usage across the whole app — cards,
-     buttons, dropdowns, the sticky header — picks this up automatically. */
-  --shadow-sm: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 10px -2px rgba(0, 0, 0, 0.4);
-  --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 14px 32px -10px rgba(0, 0, 0, 0.5);
-  --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 22px 52px -14px rgba(0, 0, 0, 0.6);
+  --glass-bg: rgba(15, 12, 9, 0.72);
+  --glass-border: rgba(244, 235, 221, 0.1);
 
+  /* Depth comes from the surface tone itself plus a hairline border and
+     this inset top highlight (a real light catching the top edge, not a
+     glow) — never a blurred drop shadow or an ambient color wash. */
+  --shadow-sm: inset 0 1px 0 rgba(244, 235, 221, 0.04), 0 2px 10px -2px rgba(0, 0, 0, 0.5);
+  --shadow-md: inset 0 1px 0 rgba(244, 235, 221, 0.05), 0 14px 32px -10px rgba(0, 0, 0, 0.55);
+  --shadow-lg: inset 0 1px 0 rgba(244, 235, 221, 0.06), 0 22px 52px -14px rgba(0, 0, 0, 0.6);
+
+  /* Instrument Serif replaces DM Serif Display for every in-app headline
+     moment (Home hero, the Release Gate verdict) — scoped to this class
+     alone, so it never touches the shared --font-serif value the
+     pre-auth landing page still uses for its own, untouched brand
+     identity (register/login moved to the `.signup-canvas` Intelligence
+     Field identity and reference Instrument Serif directly via
+     `.font-instrument`, not this variable). Every existing `font-serif`/
+     `text-display` usage inside the app picks this up automatically. */
+  --font-serif: var(--font-instrument-serif), Georgia, "Times New Roman", serif;
+
+  position: relative;
   background: var(--background);
   color: var(--ink);
 }
 
-/* ---- App canvas: ambient lighting + card depth -----------------------
-   Two large, very-low-opacity blurred warm blobs, positioned once behind
-   AppShell's <main> (see AppShell.tsx) and reused on every authenticated
-   page — never per-page decoration, so Projects/Agents/Cost/Approvals/
-   Monitoring all share the exact same atmosphere. `blur-3xl` (Tailwind)
-   does the actual softening; `mix-blend-screen` lets the two blobs (and
-   the header's own .bg-radial-glow) overlap additively like real bloom
-   instead of muddying each other. Purely decorative — aria-hidden,
-   pointer-events-none, never behind readable text at full strength. */
-.app-glow-1 {
-  background: radial-gradient(circle, color-mix(in srgb, var(--shell-accent) 55%, transparent) 0%, transparent 70%);
-}
-
-.app-glow-2 {
-  background: radial-gradient(circle, color-mix(in srgb, #a8623f 50%, transparent) 0%, transparent 70%);
-}
-
-/* A restrained "frosted card catches the light" hover treatment shared
-   by the dashboard's stat tiles and project cards — an accent-tinted
-   glow ring plus the existing --shadow-lg, not a color/opacity change on
-   the card itself (contrast is never affected). */
-.app-canvas .glow-hover {
-  transition:
-    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 0.25s ease,
-    border-color 0.25s ease;
-}
-
-.app-canvas .glow-hover:hover {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--line-strong));
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
-    0 16px 40px -12px color-mix(in srgb, var(--accent) 30%, transparent),
-    var(--shadow-lg);
-}
-
-/* A single, very faint warm radial wash tucked into a card's bottom-right
-   corner — the thing that keeps the Home dashboard's navy glass cards
-   (Recent Suite Runs, Quick Actions, Recent Activity, Performance,
-   Verdict Distribution) from reading as flat solid rectangles, and ties
-   them back to the sidebar's warm brown atmosphere without tinting the
-   card's own surface color. A ::before overlay (not a second background
-   layer on the card itself) so it never interferes with backdrop-blur or
-   the card's real background-color; `border-radius: inherit` keeps it
-   clipped to the card's own rounded corners. Needs `relative` +
-   `overflow-hidden` on the card, which every Card.tsx instance already
-   has. */
-.app-canvas .card-atmosphere {
-  position: relative;
-}
-.app-canvas .card-atmosphere::before {
+/* A very faint film-grain texture over the whole app canvas — the
+   "material" depth cue the v2 brief asks for in place of glow/blur.
+   absolute + inset 0 on the (position: relative) .app-canvas root, so it
+   scrolls with the page rather than fighting a fixed layer; painted
+   first in DOM order (a ::before), so every real child (sidebar, header,
+   main) naturally paints over it with no z-index bookkeeping needed. */
+.app-canvas::before {
   content: "";
   position: absolute;
   inset: 0;
+  z-index: 0;
   pointer-events: none;
-  border-radius: inherit;
-  /* Actually visible at a glance (not just present under inspection) —
-     a real, if soft, warm glow in the corner, not a faint trace. */
-  background: radial-gradient(
-    ellipse 85% 75% at 100% 100%,
-    color-mix(in srgb, var(--shell-accent) 38%, transparent) 0%,
-    color-mix(in srgb, var(--shell-accent) 14%, transparent) 42%,
-    transparent 75%
-  );
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-repeat: repeat;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'%3E%3C/feTurbulence%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'%3E%3C/rect%3E%3C/svg%3E");
+}
+
+/* A restrained hover treatment for clickable cards (stat tiles, project
+   cards) — a hairline border shift to accent plus a lift in elevation,
+   never a glow ring. Replaces v1's accent-tinted box-shadow glow per the
+   v2 brief's "depth from surfaces and hairlines, not glow" rule. */
+.app-canvas .glow-hover {
+  transition:
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.app-canvas .glow-hover:hover {
+  border-color: var(--accent);
+  background-color: var(--surface-elevated);
+  transform: translateY(-2px);
 }
 
 @theme inline {
@@ -270,6 +262,12 @@
      stays on --font-sans. Self-hosted via next/font/google (see
      layout.tsx) — no new dependency, no runtime Google Fonts request. */
   --font-serif: var(--font-serif), Georgia, "Times New Roman", serif;
+  /* Branded monospace — IDs, hashes, version labels, tool names, JSON
+     (Tailwind's `font-mono` utility picks this up automatically since it
+     reads from this same theme key). Self-hosted via next/font/google
+     (see layout.tsx), same free/no-new-dependency pattern as the two
+     fonts above. */
+  --font-mono: var(--font-mono), ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 
   --color-background: var(--background);
   --color-surface: var(--surface);
@@ -283,8 +281,26 @@
 
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
+  --color-accent-bright: var(--accent-bright, var(--accent-hover));
+  --color-accent-deep: var(--accent-deep, var(--accent));
   --color-accent-ink: var(--accent-ink);
   --color-accent-soft: var(--accent-soft);
+
+  --color-accent-violet: var(--accent-violet, #a78bfa);
+  --color-accent-violet-rich: var(--accent-violet-rich, #8b5cf6);
+  --color-accent-violet-soft: var(--accent-violet-soft, rgba(139, 92, 246, 0.35));
+  --color-accent-blue: var(--accent-blue, #60a5fa);
+  --color-accent-blue-rich: var(--accent-blue-rich, #3b82f6);
+  --color-accent-blue-soft: var(--accent-blue-soft, rgba(59, 130, 246, 0.35));
+  --color-accent-cyan: var(--accent-cyan, #22d3ee);
+  --color-accent-cyan-rich: var(--accent-cyan-rich, #06b6d4);
+  --color-accent-cyan-soft: var(--accent-cyan-soft, rgba(6, 182, 212, 0.35));
+  --color-accent-teal: var(--accent-teal, #2dd4bf);
+  --color-accent-teal-rich: var(--accent-teal-rich, #14b8a6);
+  --color-accent-teal-soft: var(--accent-teal-soft, rgba(20, 184, 166, 0.35));
+  --color-accent-category-red: var(--accent-category-red, #f87171);
+  --color-accent-category-red-rich: var(--accent-category-red-rich, #ef4444);
+  --color-accent-category-red-soft: var(--accent-category-red-soft, rgba(239, 68, 68, 0.35));
 
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
@@ -293,26 +309,17 @@
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
 
-  --color-stat-teal: var(--stat-teal);
-  --color-stat-teal-soft: var(--stat-teal-soft);
-  --color-stat-purple: var(--stat-purple);
-  --color-stat-purple-soft: var(--stat-purple-soft);
-  --color-stat-pink: var(--stat-pink);
-  --color-stat-pink-soft: var(--stat-pink-soft);
-
   --color-focus-ring: var(--focus-ring);
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-gold: var(--gold);
 
   --color-shell-bg: var(--shell-bg);
   --color-shell-surface: var(--shell-surface);
-  --color-shell-sidebar-bg: var(--shell-sidebar-bg);
-  --color-shell-surface-2: var(--shell-surface-2);
   --color-shell-line: var(--shell-line);
   --color-shell-line-strong: var(--shell-line-strong);
   --color-shell-ink: var(--shell-ink);
   --color-shell-ink-2: var(--shell-ink-2);
   --color-shell-ink-3: var(--shell-ink-3);
-  --color-shell-sidebar-ink-2: var(--shell-sidebar-ink-2);
-  --color-shell-sidebar-ink-3: var(--shell-sidebar-ink-3);
   --color-shell-accent: var(--shell-accent);
   --color-shell-accent-soft: var(--shell-accent-soft);
 
@@ -322,6 +329,19 @@
   --shadow-sm: 0 1px 2px rgb(var(--shadow-color) / 0.05);
   --shadow-md: 0 8px 24px -4px rgb(var(--shadow-color) / 0.10);
   --shadow-lg: 0 16px 40px -8px rgb(var(--shadow-color) / 0.16);
+
+  /* Three-tier radius system (v2 brief: 6 / 12 / 20) — a Tailwind v4
+     `--radius-*` theme key auto-generates the matching `rounded-*`
+     utility, so `rounded-control`/`rounded-surface`/`rounded-float`
+     become available everywhere for free. control (6px): buttons,
+     inputs, badges, nav items — anything clickable. surface (12px):
+     cards, panels, tables — anything that groups content. float (20px):
+     genuinely floating layers only — popovers, dropdowns, modals, the
+     command palette — never an edge-anchored panel like the mobile nav
+     drawer. */
+  --radius-control: 0.375rem;
+  --radius-surface: 0.75rem;
+  --radius-float: 1.25rem;
 
   /* Restrained entrance motion — short, one-shot, never looping. Used for
      the landing hero and staggered page content, never for routine UI
@@ -337,6 +357,31 @@
   --animate-node-pulse: node-pulse 9s ease-in-out infinite;
   --animate-orbit-spin: orbit-spin 40s linear infinite;
   --animate-float-slow: float-slow 7s ease-in-out infinite;
+
+  /* ---- Home hero motion system (Overview page only) --------------------
+     Three orbital rings at different speeds/directions (gravitational,
+     not mechanical), a slow node-breathing rhythm with per-node stagger,
+     a suspended-object float for the central AI mark, a slow breathing
+     glow behind it, a sparse set of traveling light particles, a very
+     slow atmospheric drift, and one long, quiet light sweep. Every one of
+     these is transform/opacity-only (GPU-cheap, no layout thrash) and all
+     collapse under the existing prefers-reduced-motion override below. */
+  /* v4 "cinematic luxury command center" pass: visibly faster than a
+     generic decorative loader, still linear/gravitational (never
+     easing), per the "the orbital system should feel like an active
+     lifecycle machine" brief. */
+  --animate-orbit-spin-slow: orbit-spin 14s linear infinite;
+  --animate-orbit-spin-reverse: orbit-spin-reverse 10s linear infinite;
+  --animate-orbit-spin-fast: orbit-spin 8s linear infinite;
+  --animate-node-breathe: node-breathe 2.2s ease-in-out infinite;
+  --animate-core-float: core-float 4.5s ease-in-out infinite;
+  --animate-core-glow: core-glow 4s ease-in-out infinite;
+  --animate-particle-travel: particle-travel 26s linear infinite;
+  --animate-particle-fade: particle-fade 6.5s ease-in-out infinite;
+  --animate-atmosphere-drift: atmosphere-drift 26s ease-in-out infinite;
+  --animate-light-sweep: light-sweep 15s ease-in-out infinite;
+  --animate-headline-reveal: headline-reveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-line-draw: line-draw 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes fade-in {
@@ -389,6 +434,142 @@
   }
   50% {
     transform: translateY(-10px);
+  }
+}
+
+@keyframes orbit-spin-reverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+/* A slow travelling rhythm around the lifecycle, not a simultaneous
+   pulse — each node gets its own animation-delay (see LifecycleRail) so
+   the breathing visibly moves around the ring rather than flashing all
+   at once. */
+@keyframes node-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+/* The central AI object reads as suspended in space, not CSS-animated —
+   a visible-but-elegant float plus a hair of scale breathing. */
+@keyframes core-float {
+  0%,
+  50%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  25% {
+    transform: translateY(-3px) scale(1.02);
+  }
+  75% {
+    transform: translateY(3px) scale(1.02);
+  }
+}
+
+@keyframes core-glow {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(1.08);
+  }
+}
+
+/* A single particle traveling one full lap of its orbit ring, fading in
+   and out near the start/end of the loop rather than popping instantly —
+   applied per-particle with a staggered animation-delay. */
+@keyframes particle-travel {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes particle-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  10%,
+  60% {
+    opacity: 0.9;
+  }
+  80% {
+    opacity: 0;
+  }
+}
+
+/* Near-imperceptible atmospheric drift behind the hero — a few pixels of
+   background-position movement over half a minute, never a visible pan. */
+@keyframes atmosphere-drift {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-16px, 8px);
+  }
+}
+
+/* One long, quiet band of light crossing the hero left-to-right, visible
+   only briefly each lap — cinematic haze, not a loading-bar sweep. */
+@keyframes light-sweep {
+  0% {
+    transform: translateX(-30%);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.12;
+  }
+  22% {
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(130%);
+    opacity: 0;
+  }
+}
+
+/* Editorial reveal for the hero headline — emerges from darkness rather
+   than a stock fade/slide. */
+@keyframes headline-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* The lifecycle connector line draws itself left-to-right on mount
+   (paired with each node's own fade-in-up stagger). */
+@keyframes line-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
   }
 }
 
@@ -479,6 +660,10 @@
   line-height: 2rem;
   font-weight: 700;
   letter-spacing: -0.025em;
+  /* Every metric is a number meant to be scanned/compared against its
+     neighbors (pass counts, latencies, scores) — fixed-width digits keep
+     a column of these from jittering as values change. */
+  font-variant-numeric: tabular-nums;
 }
 
 .text-metric-label {
@@ -532,15 +717,12 @@ a {
    always wins over Tailwind's generated utility classes (which all live in
    `@layer utilities`) regardless of specificity — that's normally correct
    (nav-style links should read as body text, not browser blue), but it
-   also silently overrides `text-shell-ink`/`text-shell-accent` etc. on any
-   <a> the sidebar renders (AppShell's nav Links and brand Link — Next.js
-   `<Link>` always renders an <a>), leaving them inheriting the page's
-   light-canvas ink color instead of the sidebar's own light text color.
-   Scoped to just the sidebar's own background class so nothing outside
-   AppShell (landing page, auth branding, or any other link) is affected. */
-.bg-shell-sidebar-bg a {
-  color: var(--shell-ink);
-}
+   also silently overrides a text-color utility applied directly to any
+   other <a>/<Link>. AppShell's NavLink (v2 redesign) works around this at
+   the source — its color classes live on an inner <span>, never on the
+   <Link> itself — rather than a blanket override here, since a single
+   hardcoded override color couldn't express its active/inactive text
+   distinction anyway. See NavLink's own comment. */
 
 /* Consistent, restrained focus treatment across every interactive
    element — replaces the browser default (blue) outline with a soft
@@ -601,11 +783,359 @@ select:focus-visible {
 .app-canvas .card-depth {
   background-image: radial-gradient(
     ellipse 80% 70% at 100% 100%,
-    color-mix(in srgb, var(--shell-accent) 26%, transparent) 0%,
-    color-mix(in srgb, var(--shell-accent) 9%, transparent) 45%,
+    color-mix(in srgb, var(--accent) 26%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 9%, transparent) 45%,
     transparent 78%
   );
   background-repeat: no-repeat;
+}
+
+/* ---- Auth pages: "Intelligence Field" system ---------------------------
+   A deliberately separate world from the warm light palette above and
+   from `.app-canvas`'s espresso/champagne palette — midnight + electric
+   violet/ultramarine/cyan, shared by /register and /login (see
+   SignupField.tsx and both auth route page.tsx files; the old
+   AuthBranding.tsx warm-light panel they used to share has been removed).
+   Scoped the same way `.app-canvas` scopes the authenticated product: a
+   class on each page's own root element, so nothing outside these two
+   routes (the public landing page, the authenticated app) is affected. */
+.signup-canvas {
+  --background: #05060a;
+  --surface: #0b0d14;
+  --surface-2: #111525;
+  --surface-elevated: #141929;
+  --line: rgba(148, 163, 184, 0.1);
+  --line-strong: rgba(148, 163, 184, 0.22);
+  --ink: #f8fafc;
+  --ink-2: #aeb8cc;
+  --ink-3: #747e92;
+
+  --accent: #8b5cf6;
+  --accent-hover: #3b82f6;
+  --accent-ink: #f8fafc;
+  --accent-soft: rgba(139, 92, 246, 0.14);
+
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.14);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.14);
+  /* Semantic red only — never the warm maroon the light theme uses. */
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.12);
+
+  --focus-ring: #8b5cf6;
+
+  /* Page-local accent trio, kept distinct from --accent/--accent-hover
+     above (which drive shared Field/Button tokens) so the signature
+     visual, button gradient and focus-sweep can each reference the exact
+     violet/blue/cyan steps independent of the semantic accent pair. */
+  --signup-violet: #8b5cf6;
+  --signup-violet-deep: #6d28d9;
+  --signup-blue: #3b82f6;
+  --signup-blue-deep: #2563eb;
+  --signup-cyan: #06b6d4;
+
+  --shadow-sm: inset 0 1px 0 rgba(248, 250, 252, 0.03), 0 2px 12px -2px rgba(0, 0, 0, 0.6);
+  --shadow-md: inset 0 1px 0 rgba(248, 250, 252, 0.04), 0 16px 36px -10px rgba(0, 0, 0, 0.65);
+  --shadow-lg:
+    inset 0 1px 0 rgba(248, 250, 252, 0.05),
+    0 24px 56px -16px rgba(76, 29, 149, 0.25),
+    0 24px 56px -16px rgba(0, 0, 0, 0.6);
+
+  position: relative;
+  background: var(--background);
+  color: var(--ink);
+}
+
+.signup-canvas .font-instrument {
+  font-family: var(--font-instrument-serif), Georgia, serif;
+}
+
+/* Film-grain, identical recipe to `.app-canvas::before` (a generic noise
+   texture, not a Home/app visual signature) so the signup canvas gets the
+   same material depth cue. */
+.signup-canvas::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-repeat: repeat;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'%3E%3C/feTurbulence%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'%3E%3C/rect%3E%3C/svg%3E");
+}
+
+/* Faint, asymmetric atmospheric light pools (violet upper-left, cyan
+   lower-right) plus an edge vignette — never a single centered gradient
+   blob. */
+.signup-vignette {
+  background:
+    radial-gradient(ellipse 90% 70% at 26% 18%, rgba(139, 92, 246, 0.12), transparent 55%),
+    radial-gradient(ellipse 80% 80% at 96% 96%, rgba(6, 182, 212, 0.09), transparent 60%),
+    radial-gradient(ellipse 140% 100% at 50% 50%, transparent 38%, rgba(2, 3, 8, 0.65) 100%);
+}
+
+/* The dark translucent form surface — "almost-black glass", not a giant
+   rounded rectangle: a restrained radius, a 1px hairline border and an
+   inset top highlight stand in for a drop shadow glow. */
+.signup-form-panel {
+  background: rgba(8, 11, 20, 0.74);
+  border: 1px solid rgba(248, 250, 252, 0.08);
+  box-shadow: var(--shadow-lg);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .signup-form-panel {
+    -webkit-backdrop-filter: blur(22px) saturate(1.3);
+    backdrop-filter: blur(22px) saturate(1.3);
+  }
+}
+
+/* Primary CTA — deep violet → electric blue, with a restrained light
+   sweep on hover (never a glow ring) and a small press-scale. */
+.signup-cta {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--signup-violet-deep), var(--signup-blue-deep));
+  color: #f8fafc;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease;
+}
+
+.signup-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 25%, rgba(255, 255, 255, 0.22) 50%, transparent 75%);
+  transform: translateX(-120%);
+  transition: transform 0.65s ease;
+}
+
+.signup-cta:hover::after {
+  transform: translateX(120%);
+}
+
+.signup-cta:hover {
+  box-shadow:
+    0 10px 28px -8px rgba(59, 130, 246, 0.45),
+    0 6px 16px -6px rgba(139, 92, 246, 0.35);
+}
+
+.signup-cta:active {
+  transform: scale(0.98);
+}
+
+.signup-cta:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Input focus: a one-shot violet→blue sweep on the border/ring, instead
+   of the shared Field/Input component's instant accent-colored outline —
+   deliberately an unlayered rule (same technique as the `a { color:
+   inherit }` override above) so it reliably wins over the generated
+   Tailwind utility classes regardless of load order. */
+@keyframes signup-focus-sweep {
+  from {
+    border-color: var(--signup-violet);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.16);
+  }
+  to {
+    border-color: var(--signup-blue);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
+  }
+}
+
+.signup-canvas .signup-input:focus-visible {
+  animation: signup-focus-sweep 0.5s ease-out forwards;
+  outline: none;
+}
+
+/* ---- Intelligence Field motion (SignupField.tsx) ----------------------
+   Every keyframe below is transform/opacity-only except the two that
+   animate stroke-dasharray offsets and offset-distance (both GPU-cheap,
+   no layout thrash). Deliberately un-synchronized durations (the network
+   paths alone span 4s/6s/9s/11s) so the field never reads as one looping
+   clip. */
+
+@keyframes signup-ambient-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-2.5%, 2%) scale(1.03);
+  }
+}
+
+.signup-field .signup-ambient {
+  animation: signup-ambient-drift 26s ease-in-out infinite;
+  transform-origin: center;
+}
+
+@keyframes signup-path-flow {
+  to {
+    stroke-dashoffset: -420;
+  }
+}
+
+.signup-field .signup-path {
+  animation-name: signup-path-flow;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes signup-node-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+.signup-field .signup-node {
+  animation-name: signup-node-breathe;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes signup-core-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.signup-field .signup-core-rotate {
+  animation: signup-core-rotate 38s linear infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes signup-core-breathe {
+  0%,
+  50%,
+  100% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.04);
+  }
+  75% {
+    transform: scale(0.98);
+  }
+}
+
+.signup-field .signup-core-breathe {
+  animation: signup-core-breathe 9s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes signup-core-glow {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.08);
+  }
+}
+
+.signup-field .signup-core-glow {
+  animation: signup-core-glow 7s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Hover-the-CTA response: the core glows a little brighter and a little
+   faster — "the field becomes slightly more active," never a jump. */
+.signup-field.is-energized .signup-core-glow {
+  animation-duration: 2.6s;
+}
+
+@keyframes signup-particle-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  12%,
+  55% {
+    opacity: 0.95;
+  }
+  75% {
+    opacity: 0;
+  }
+}
+
+.signup-field .signup-particle {
+  animation-name: signup-offset-travel, signup-particle-fade;
+  animation-timing-function: linear, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+}
+
+@keyframes signup-offset-travel {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
+}
+
+/* The email/name focus-response particle — continuous and brighter than
+   the ambient particles while that field has focus, fading immediately
+   on blur because the element itself unmounts (see SignupField.tsx). */
+.signup-field .signup-particle-active {
+  animation: signup-offset-travel 1.8s linear infinite;
+  opacity: 0.95;
+}
+
+@keyframes signup-ring-expand {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
+
+.signup-field .signup-ring {
+  animation: signup-ring-expand 1.8s ease-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Technical metadata annotations (AGENT GRAPH / RUNTIME / EVALUATION /
+   ...) — low-opacity Geist Mono labels that drift in and out, never
+   static dashboard chrome. */
+@keyframes signup-label-fade {
+  0%,
+  100% {
+    opacity: 0.16;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.signup-label {
+  animation: signup-label-fade 6s ease-in-out infinite;
 }
 
 /* ---- Decorative background treatments ---------------------------------
@@ -631,8 +1161,9 @@ select:focus-visible {
    and its mask live on a `::before` overlay instead, confined to
    painting only the faint grid lines; the panel's actual background
    color and content are untouched by it. Callers already have
-   `relative`/`overflow-hidden` (see page.tsx's right panel and
-   AuthBranding.tsx) so no consuming file needs to change. */
+   `relative`/`overflow-hidden` (see page.tsx's right panel and the
+   register/login pages' background layer) so no consuming file needs to
+   change. */
 .bg-technical-grid-dark::before {
   content: "";
   position: absolute;
@@ -643,27 +1174,6 @@ select:focus-visible {
     linear-gradient(90deg, color-mix(in srgb, white 6%, transparent) 1px, transparent 1px);
   background-size: 44px 44px;
   mask-image: radial-gradient(ellipse 78% 62% at 60% 40%, black 30%, transparent 72%);
-}
-
-/* A dedicated grid texture for the sidebar — NOT a reuse of
-   .bg-technical-grid-dark above at higher opacity, deliberately: that
-   class's own mask is a wide ellipse tuned for the landing page's broad
-   horizontal panel, which would leave most of a tall, narrow 240px
-   sidebar outside the mask (nearly invisible for most of its height).
-   This version fades only at the very top/bottom (a vertical mask) so
-   the pattern reads consistently down the sidebar's full height, and is
-   noticeably higher-contrast (10% vs. 6%) since this surface has much
-   less empty space for a faint pattern to read against. */
-.sidebar-grid::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(color-mix(in srgb, white 10%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, white 10%, transparent) 1px, transparent 1px);
-  background-size: 36px 36px;
-  mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 88%, transparent 100%);
 }
 
 .bg-radial-glow {
@@ -702,5 +1212,15 @@ select:focus-visible {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* The blanket rule above still leaves the Intelligence Field's elements
+     visible at their first animation frame (a frozen rotation/breathe
+     step, static particle dots mid-path). The brief for reduced motion is
+     stricter than "freeze": particles and the rare ring pulse should
+     disappear entirely, leaving a calm, static composition. */
+  .signup-field .signup-particle,
+  .signup-field .signup-ring {
+    display: none;
   }
 }

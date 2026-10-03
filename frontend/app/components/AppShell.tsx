@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -18,9 +18,7 @@ import {
   MenuIcon,
   MonitoringIcon,
   ProjectsIcon,
-  RCAIcon,
   ReleaseIcon,
-  RunsIcon,
   SearchIcon,
   SettingsIcon,
   TestSuitesIcon,
@@ -41,13 +39,26 @@ const SEARCH_KIND_LABEL: Record<string, string> = {
  * AgentVersions. Debounced client-side (300ms) so every keystroke
  * doesn't issue a request; disabled below 2 characters, matching a
  * normal "start typing to search" affordance rather than querying on an
- * empty/1-char string. */
+ * empty/1-char string. A real Cmd/Ctrl+K shortcut focuses the field —
+ * the "keyboard hints, shown cleanly" the v2 brief asks for. */
 function GlobalSearch() {
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [open, setOpen] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   function handleChange(value: string) {
     setQuery(value);
@@ -73,21 +84,36 @@ function GlobalSearch() {
   const showDropdown = open && debounced.trim().length >= 2;
 
   return (
-    <div className="relative w-full max-w-md">
-      <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-3">
+    <div className="relative mx-auto w-full max-w-xl">
+      <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-ink-3">
         <SearchIcon />
       </span>
       <input
+        ref={inputRef}
+        id="global-search-input"
         value={query}
         onChange={(e) => handleChange(e.target.value)}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Search projects, agents, test suites…"
+        placeholder="Search agents, runs, test suites, or ask anything…"
         aria-label="Global search"
-        className="w-full rounded-md border border-line-strong bg-surface py-2 pr-3 pl-9 text-sm text-ink placeholder:text-ink-3 backdrop-blur-md transition-all duration-150 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
+        className="w-full rounded-full border border-line-strong bg-surface py-2.5 pr-16 pl-10 text-sm text-ink placeholder:text-ink-3 transition-all duration-150 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
       />
+      {query.length === 0 && (
+        <span
+          className="pointer-events-none absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1"
+          aria-hidden="true"
+        >
+          <kbd className="rounded border border-line-strong bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-ink-3">
+            &#8984;
+          </kbd>
+          <kbd className="rounded border border-line-strong bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-ink-3">
+            K
+          </kbd>
+        </span>
+      )}
       {showDropdown && (
-        <div className="glass absolute top-full left-0 z-30 mt-2 w-full overflow-hidden rounded-lg border shadow-lg">
+        <div className="glass absolute top-full left-0 z-30 mt-2 w-full overflow-hidden rounded-float border shadow-lg">
           {searchQuery.isLoading && (
             <p className="px-3 py-3 text-xs text-ink-3">Searching…</p>
           )}
@@ -118,26 +144,22 @@ interface NavItem {
   icon: (props: { className?: string }) => ReactNode;
 }
 
-// Every route here is a real, backed page — Home/Test Suites/Runs/
-// Evaluation/Release Gate/RCA are account-wide views powered by the new
-// dashboard/activity/results backend endpoints (see
-// app/services/dashboard_service.py, activity_service.py,
-// suite_run_service.py.list_all_results_for_owner()); AutoFix reuses the
-// same real activity log, filtered. Approvals/Cost/Monitoring are the
-// pre-existing real pages, kept exactly as they were — nothing removed.
+// A single flat list (no section headers) — every route here is still the
+// exact same real, backed page as before (see git history), just presented
+// as one continuous list rather than grouped by lifecycle stage. Runs and
+// RCA keep their routes and are still reachable from the lifecycle rail /
+// recent-activity rows on Home; they're just not primary nav entries here.
 const NAV_ITEMS: NavItem[] = [
-  { href: "/home", label: "Home", icon: HomeIcon },
+  { href: "/home", label: "Overview", icon: HomeIcon },
   { href: "/projects", label: "Projects", icon: ProjectsIcon },
   { href: "/agents", label: "Agents", icon: AgentIcon },
   { href: "/test-suites", label: "Test Suites", icon: TestSuitesIcon },
-  { href: "/runs", label: "Runs", icon: RunsIcon },
   { href: "/evaluation", label: "Evaluation", icon: VerifyIcon },
   { href: "/release-gate", label: "Release Gate", icon: ReleaseIcon },
-  { href: "/rca", label: "RCA", icon: RCAIcon },
   { href: "/autofix", label: "AutoFix", icon: ToolsIcon },
   { href: "/approvals", label: "Approvals", icon: ApprovalsIcon },
-  { href: "/cost", label: "Cost", icon: CostIcon },
   { href: "/monitoring", label: "Monitoring", icon: MonitoringIcon },
+  { href: "/cost", label: "Cost", icon: CostIcon },
 ];
 
 const SETTINGS_ITEM: NavItem = { href: "/settings", label: "Settings", icon: SettingsIcon };
@@ -158,24 +180,26 @@ function NavLink({
     <Link
       href={item.href}
       onClick={onClick}
-      className={`group relative flex items-center gap-2.5 rounded-lg py-2 pr-2.5 pl-3 text-sm font-medium no-underline transition-all duration-200 ${
+      // Color lives on the inner span, not this <a>: globals.css's
+      // unlayered `a { color: inherit }` reset (see its own comment)
+      // always beats a layered Tailwind text-color utility applied
+      // directly to an <a>, which would otherwise make active and
+      // inactive items render in the exact same inherited color —
+      // wrapping the icon+label in a span sidesteps that entirely.
+      className={`group relative flex h-9 items-center rounded-control border px-3 text-sm font-medium no-underline transition-colors duration-150 ${
         active
-          ? "bg-linear-to-r from-shell-accent/30 via-shell-accent/15 to-transparent text-shell-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_20px_-6px_var(--shell-accent)] hover:from-shell-accent/40 hover:via-shell-accent/20"
-          : "text-shell-ink hover:bg-shell-surface-2 hover:text-shell-ink hover:translate-x-0.5"
+          ? "border-accent/30 bg-accent-soft shadow-[0_0_0_1px_rgba(217,128,74,0.08)]"
+          : "border-transparent hover:border-line hover:bg-surface"
       }`}
     >
       <span
-        className={`absolute top-1/2 left-0 h-4 w-0.5 -translate-y-1/2 rounded-full bg-shell-accent transition-all duration-200 ${
-          active ? "opacity-100 shadow-[0_0_8px_var(--shell-accent)]" : "opacity-0"
-        }`}
-        aria-hidden="true"
-      />
-      <Icon
-        className={`shrink-0 transition-transform duration-200 ${active ? "" : "group-hover:scale-110"}`}
-      />
-      <span className="flex-1">{item.label}</span>
+        className={`flex flex-1 items-center gap-2.5 ${active ? "text-ink" : "text-ink-2 group-hover:text-ink"}`}
+      >
+        <Icon className={`shrink-0 ${active ? "text-accent" : ""}`} />
+        <span className="flex-1 truncate">{item.label}</span>
+      </span>
       {!!badge && badge > 0 && (
-        <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-shell-accent px-1 text-[10px] font-semibold text-shell-bg tabular-nums">
+        <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-ink tabular-nums">
           {badge}
         </span>
       )}
@@ -183,16 +207,21 @@ function NavLink({
   );
 }
 
-function Brand({ tone = "shell" }: { tone?: "shell" | "light" }) {
+function Brand({ tagline = false }: { tagline?: boolean }) {
   return (
     <Link
       href="/home"
-      className={`flex items-center gap-2 px-1 py-1 text-sm font-semibold tracking-tight no-underline transition-opacity duration-150 hover:opacity-80 ${
-        tone === "shell" ? "text-shell-ink" : "text-ink"
-      }`}
+      className="flex items-center gap-2 px-1 py-1 text-sm font-semibold tracking-tight text-ink no-underline transition-opacity duration-150 hover:opacity-80"
     >
-      <BrandMark className={tone === "shell" ? "text-shell-accent" : "text-accent"} />
-      AgentOps AI
+      <BrandMark className="text-accent" />
+      <span>
+        AgentOps AI
+        {tagline && (
+          <span className="mt-0.5 block text-[9px] font-medium tracking-[0.12em] text-ink-3 uppercase">
+            Trusted agents. Real impact.
+          </span>
+        )}
+      </span>
     </Link>
   );
 }
@@ -204,40 +233,66 @@ function Brand({ tone = "shell" }: { tone?: "shell" | "light" }) {
 function UserBadge({ email, loading }: { email: string | undefined; loading: boolean }) {
   const initial = email ? email.charAt(0).toUpperCase() : "";
   return (
-    <div className="flex items-center gap-2.5 rounded-md px-3 py-2">
-      <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-shell-accent-soft text-sm font-semibold text-shell-accent ring-1 ring-shell-line-strong">
+    <div className="flex items-center gap-2.5 rounded-control px-3 py-2">
+      <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent ring-1 ring-line-strong">
         {loading ? "" : initial}
         <span
-          className="absolute right-0 bottom-0 h-2 w-2 rounded-full bg-success ring-2 ring-shell-sidebar-bg"
+          className="absolute right-0 bottom-0 h-2 w-2 rounded-full bg-success ring-2 ring-sidebar-bg"
           aria-hidden="true"
           title="Signed in"
         />
       </span>
       <div className="min-w-0">
-        <p className="truncate text-xs font-medium text-shell-ink">
+        <p className="truncate text-xs font-medium text-ink">
           {loading ? "Loading…" : (email ?? "Signed in")}
         </p>
-        <p className="text-[11px] text-shell-ink-3">Signed in</p>
+        <p className="text-[11px] text-ink-3">Signed in</p>
       </div>
     </div>
   );
 }
 
+function SidebarNav({
+  pathname,
+  navBadge,
+  onNavigate,
+}: {
+  pathname: string;
+  navBadge: (href: string) => number | undefined;
+  onNavigate?: () => void;
+}) {
+  return (
+    <nav className="relative flex flex-1 flex-col gap-0.5 overflow-y-auto">
+      {NAV_ITEMS.map((item) => (
+        <NavLink
+          key={item.href}
+          item={item}
+          active={pathname.startsWith(item.href)}
+          badge={navBadge(item.href)}
+          onClick={onNavigate}
+        />
+      ))}
+    </nav>
+  );
+}
+
 /**
- * The authenticated application shell — a dark sidebar (desktop) + a dark
- * "app canvas" content area (the `.app-canvas` scoped token override in
- * globals.css), used by every page behind login (Projects, project chat,
- * Agents, Cost, Approvals, Monitoring). Every page keeps exactly the same
- * data/mutation logic and only hands this component its content plus an
- * onLogout callback and an optional breadcrumb.
+ * The authenticated application shell — a dark espresso sidebar (desktop)
+ * + the dark "app canvas" content area (the `.app-canvas` scoped token
+ * override in globals.css), used by every page behind login. Every page
+ * keeps exactly the same data/mutation logic and only hands this
+ * component its content plus an onLogout callback and an optional
+ * breadcrumb.
  *
- * One continuous espresso surface, not a dark-panel-plus-light-canvas
- * split: the sidebar (--shell-* tokens) and the main content
- * (`.app-canvas`'s own override of the shared --surface/--ink family)
- * are two closely related dark tones rather than two different registers
- * — matching the reference composition's unified dark product shell. The
- * public landing/auth pages are untouched (`.app-canvas` is scoped to
- * this component's own root element only).
+ * "Espresso Ink" (v2 redesign): the sidebar no longer draws from a
+ * separate --shell-* token family shared with the pre-auth landing/auth
+ * panels (those keep their own untouched brand identity) — it's a plain
+ * child of `.app-canvas`, so it inherits that scope's ink/accent/surface
+ * tokens directly via normal CSS cascade. Only its own background
+ * (--sidebar-bg, "the same family, one step lifted") is a dedicated
+ * token. This guarantees the sidebar and the app content can never
+ * visually drift apart, and keeps the pre-auth pages completely
+ * unaffected by anything changed here.
  */
 export function AppShell({
   children,
@@ -271,116 +326,52 @@ export function AppShell({
 
   return (
     <div className="app-canvas relative flex min-h-screen bg-background">
-      <aside className="sidebar-grid relative hidden w-60 shrink-0 flex-col overflow-hidden border-r border-shell-line bg-shell-sidebar-bg px-3 py-4 md:flex">
-        {/* Reference-fidelity decorative language: large organic blobs
-            (asymmetric border-radius, never a plain circle) — one
-            anchored upper/middle, extending in behind the nav list
-            itself, and one anchored to the lower-left corner, bleeding
-            off both the left and bottom edges. Opacity is deliberately
-            high enough to read clearly at a glance (a decoration nobody
-            can actually see is the same as not having one) while blur
-            keeps every edge soft; the underlying brown base and darker
-            espresso gaps between the shapes stay visible, so this never
-            becomes one flat colored panel. Every shape here is
-            aria-hidden/pointer-events-none and sits behind the
-            `relative` nav/brand/user-area siblings below, so none of
-            them can ever intercept a click. */}
-        {/* blur-3xl (64px) was the actual reason these read as faint in
-            practice despite high opacity numbers: a radial-gradient that
-            already fades to transparent by ~70% of its own radius, then
-            diffused across a 64px blur, spreads what little color exists
-            over a huge area rather than concentrating it. blur-xl (24px)
-            keeps only the very edge soft while the body of each shape
-            reads as an actual curved form rather than a diffuse glow; a
-            slight rotation on each one (and an elongated, non-circular
-            aspect ratio) is what makes them read as flowing ribbons
-            rather than blurred dots. The gradient still holds its peak
-            color out to a wide radius before fading, so the shape itself
-            (not just its outer glow) is what's visible. */}
+      <aside className="relative z-10 hidden w-64 shrink-0 flex-col overflow-hidden border-r border-line bg-sidebar-bg px-3 py-4 md:flex">
+        {/* The sidebar's one retained decorative element: a single
+            organic (asymmetric-radius) shape, very low opacity, anchored
+            to the bottom corner only — the v2 brief's explicit allowance
+            ("retain the organic pattern as a single <=5% element at the
+            bottom only"), replacing v1's three high-opacity blurred
+            blobs plus visible grid lines. */}
         <div
-          className="pointer-events-none absolute -top-20 left-4 h-96 w-80 opacity-85 blur-xl"
+          className="pointer-events-none absolute -bottom-24 -left-16 h-72 w-64 opacity-[0.05]"
           style={{
-            borderRadius: "32% 68% 58% 42% / 48% 36% 64% 52%",
-            transform: "rotate(-14deg)",
-            background:
-              "radial-gradient(ellipse 70% 55% at 42% 32%, color-mix(in srgb, var(--shell-accent) 88%, transparent) 0%, color-mix(in srgb, var(--shell-accent) 62%, transparent) 48%, transparent 80%)",
+            borderRadius: "58% 42% 66% 34% / 48% 40% 60% 52%",
+            transform: "rotate(-8deg)",
+            background: "var(--accent)",
           }}
           aria-hidden="true"
         />
-        <div
-          className="pointer-events-none absolute -bottom-32 -left-20 h-104 w-96 opacity-80 blur-xl"
-          style={{
-            borderRadius: "66% 34% 52% 48% / 44% 46% 54% 56%",
-            transform: "rotate(9deg)",
-            background:
-              "radial-gradient(ellipse 65% 55% at 58% 48%, color-mix(in srgb, var(--shell-accent) 82%, transparent) 0%, color-mix(in srgb, var(--shell-accent) 58%, transparent) 48%, transparent 80%)",
-          }}
-          aria-hidden="true"
-        />
-        {/* A cooler, rust-brown companion shape layered between the two
-            main peach blobs, so the sidebar reads as several overlapping
-            translucent forms rather than one uniform hue. */}
-        <div
-          className="pointer-events-none absolute top-1/4 -right-24 h-80 w-72 opacity-60 blur-lg"
-          style={{
-            borderRadius: "42% 58% 64% 36% / 58% 40% 60% 42%",
-            transform: "rotate(-22deg)",
-            background:
-              "radial-gradient(ellipse 60% 50% at 48% 45%, color-mix(in srgb, #a8623f 88%, transparent) 0%, color-mix(in srgb, #a8623f 55%, transparent) 48%, transparent 78%)",
-          }}
-          aria-hidden="true"
-        />
-        <div
-          className="app-glow-1 pointer-events-none absolute -top-16 -left-16 h-48 w-48 rounded-full opacity-30 blur-3xl"
-          aria-hidden="true"
-        />
-        <Brand />
-        <nav className="relative mt-7 flex flex-1 flex-col gap-0.5 overflow-y-auto">
-          {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.href}
-              item={item}
-              active={pathname.startsWith(item.href)}
-              badge={navBadge(item.href)}
-            />
-          ))}
-        </nav>
-        <div className="relative flex flex-col gap-0.5 border-t border-shell-line pt-2">
+        <Brand tagline />
+        <div className="relative mt-7 flex flex-1 flex-col overflow-hidden">
+          <SidebarNav pathname={pathname} navBadge={navBadge} />
+        </div>
+        <div className="relative flex flex-col gap-0.5 border-t border-line pt-2">
           <NavLink item={SETTINGS_ITEM} active={pathname.startsWith(SETTINGS_ITEM.href)} />
         </div>
-        <div className="relative flex flex-col gap-1 border-t border-shell-line pt-3">
+        <div className="relative flex flex-col gap-2 border-t border-line pt-3">
           <UserBadge email={userQuery.data?.email} loading={userQuery.isLoading} />
           <button
-            onClick={onLogout}
-            className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-shell-ink transition-colors duration-150 hover:bg-danger-soft hover:text-danger"
+            type="button"
+            onClick={() => document.getElementById("global-search-input")?.focus()}
+            className="flex w-full items-center gap-2.5 rounded-control border border-line px-3 py-2 text-left transition-colors duration-150 hover:border-line-strong hover:bg-surface"
           >
-            <LogoutIcon className="shrink-0" />
-            Log out
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control bg-surface-2 text-ink-2">
+              <SearchIcon />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs font-medium text-ink">
+                Get started with Cmd + K
+              </span>
+              <span className="block truncate text-[11px] text-ink-3">
+                Search agents, runs, tests…
+              </span>
+            </span>
           </button>
         </div>
       </aside>
 
       <div className="relative flex min-w-0 flex-1 flex-col">
-        {/* Ambient atmosphere for the content column, not just a strip
-            behind the header — two large, very-low-opacity warm blobs
-            (see .app-glow-1/-2 in globals.css) that drift slowly (the
-            existing --animate-float-slow token, reused rather than a
-            new keyframe) and blend additively with the header's own
-            .bg-radial-glow. `absolute` and scoped to THIS column (which
-            is `relative`) rather than `fixed` to the viewport — a fixed,
-            inset-0 layer would escape this column's bounds and paint
-            over the sidebar too, which isn't the intent. Every child
-            here is aria-hidden and pointer-events-none — decoration
-            only, never intercepting a click or being read by a screen
-            reader. */}
-        <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
-          <div className="app-glow-1 animate-float-slow absolute -top-40 right-[-10%] h-128 w-lg rounded-full opacity-[0.16] blur-3xl" />
-          <div
-            className="app-glow-2 animate-float-slow absolute top-1/3 -left-32 h-96 w-96 rounded-full opacity-[0.12] blur-3xl"
-            style={{ animationDelay: "-3.5s" }}
-          />
-        </div>
-
         <header className="glass sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-line px-4 py-3 md:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button
@@ -391,7 +382,7 @@ export function AppShell({
               <MenuIcon />
             </button>
             <div className="min-w-0 md:hidden">
-              <Brand tone="light" />
+              <Brand />
             </div>
             {breadcrumb && <div className="hidden min-w-0 md:block">{breadcrumb}</div>}
           </div>
@@ -435,12 +426,19 @@ export function AppShell({
                     ? ""
                     : (userQuery.data?.email?.charAt(0).toUpperCase() ?? "")}
                 </span>
+                <span className="hidden min-w-0 flex-col items-start leading-tight sm:flex">
+                  <span className="max-w-32 truncate text-xs font-semibold text-ink">
+                    {userQuery.isLoading
+                      ? ""
+                      : (userQuery.data?.full_name ?? userQuery.data?.email ?? "Signed in")}
+                  </span>
+                </span>
                 <ChevronDownIcon
                   className={`text-ink-3 transition-transform duration-150 ${userMenuOpen ? "rotate-180" : ""}`}
                 />
               </button>
               {userMenuOpen && (
-                <div className="glass absolute top-full right-0 z-30 mt-2 w-44 overflow-hidden rounded-lg border py-1 shadow-lg">
+                <div className="glass absolute top-full right-0 z-30 mt-2 w-44 overflow-hidden rounded-float border py-1 shadow-lg">
                   <p className="truncate border-b border-line px-3 py-2 text-xs text-ink-3">
                     {userQuery.data?.email ?? "Signed in"}
                   </p>
@@ -470,44 +468,40 @@ export function AppShell({
       {mobileNavOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
           <div
-            className="absolute inset-0 bg-shell-bg/60"
+            className="absolute inset-0 bg-black/60"
             onClick={() => setMobileNavOpen(false)}
             aria-hidden="true"
           />
-          <div className="animate-fade-in relative flex w-64 flex-col overflow-y-auto bg-shell-sidebar-bg px-3 py-4 shadow-lg">
+          <div className="animate-fade-in relative flex w-72 flex-col overflow-y-auto bg-sidebar-bg px-3 py-4 shadow-lg">
             <div className="flex items-center justify-between">
               <Brand />
               <button
                 onClick={() => setMobileNavOpen(false)}
-                className="text-shell-sidebar-ink-2 transition-colors duration-150 hover:text-shell-ink"
+                className="text-ink-2 transition-colors duration-150 hover:text-ink"
                 aria-label="Close navigation"
               >
                 <CloseIcon />
               </button>
             </div>
-            <nav className="mt-6 flex flex-col gap-0.5">
-              {NAV_ITEMS.map((item) => (
-                <NavLink
-                  key={item.href}
-                  item={item}
-                  active={pathname.startsWith(item.href)}
-                  badge={navBadge(item.href)}
-                  onClick={() => setMobileNavOpen(false)}
-                />
-              ))}
-              <div className="mt-1 flex flex-col gap-0.5 border-t border-shell-line pt-2">
+            <div className="mt-6 flex flex-1 flex-col overflow-hidden">
+              <SidebarNav
+                pathname={pathname}
+                navBadge={navBadge}
+                onNavigate={() => setMobileNavOpen(false)}
+              />
+              <div className="mt-1 flex flex-col gap-0.5 border-t border-line pt-2">
                 <NavLink
                   item={SETTINGS_ITEM}
                   active={pathname.startsWith(SETTINGS_ITEM.href)}
                   onClick={() => setMobileNavOpen(false)}
                 />
               </div>
-            </nav>
-            <div className="mt-auto flex flex-col gap-1 border-t border-shell-line pt-3">
+            </div>
+            <div className="mt-auto flex flex-col gap-1 border-t border-line pt-3">
               <UserBadge email={userQuery.data?.email} loading={userQuery.isLoading} />
               <button
                 onClick={onLogout}
-                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-shell-ink transition-colors duration-150 hover:bg-shell-surface-2 hover:text-shell-ink"
+                className="flex h-8 w-full items-center gap-2.5 rounded-control px-3 text-sm font-medium text-ink-2 transition-colors duration-150 hover:bg-surface-2 hover:text-ink"
               >
                 <LogoutIcon className="shrink-0" />
                 Log out

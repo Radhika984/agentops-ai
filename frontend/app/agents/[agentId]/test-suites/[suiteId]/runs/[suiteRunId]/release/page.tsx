@@ -7,13 +7,15 @@ import { AppShell } from "../../../../../../../components/AppShell";
 import { Badge } from "../../../../../../../components/ui/Badge";
 import { Button } from "../../../../../../../components/ui/Button";
 import { Card } from "../../../../../../../components/ui/Card";
-import { CheckIcon, ChevronLeftIcon, CloseIcon, WarningIcon } from "../../../../../../../components/ui/icons";
-import { MetricCard } from "../../../../../../../components/ui/MetricCard";
-import { VerdictBanner } from "../../../../../../../components/ui/VerdictBanner";
+import { Disclosure } from "../../../../../../../components/ui/CodeDisclosure";
+import { ChevronLeftIcon, WarningIcon } from "../../../../../../../components/ui/icons";
+import { STATUS_META, StatusBadge, type StatusKey } from "../../../../../../../components/ui/Status";
 import {
   ApiError,
   clearToken,
   evaluateRelease,
+  getSuiteRun,
+  listAgentVersions,
   listApprovals,
   listTestCases,
   type HardGateReasonRead,
@@ -24,20 +26,88 @@ function formatRate(rate: number | null): string {
   return rate === null ? "—" : `${Math.round(rate * 100)}%`;
 }
 
-// Matches approvals/page.tsx's own STATUS_TONE vocabulary exactly — the
-// same status shown there, not a second color scheme for this page.
-const APPROVAL_STATUS_TONE = { pending: "warning", approved: "success", rejected: "danger" } as const;
+function formatTimestamp(value: string | null | undefined): string {
+  return value ? new Date(value).toLocaleString() : "—";
+}
+
+// The backend's five real, deterministic hard-gate categories
+// (backend/app/release_gate/gate.py's own HARD_GATE_CATEGORIES) — nothing
+// invented. Only four of these five get a dedicated `*_count` field on
+// ReleaseDecisionResponse (safety_flag/forbidden_tool/missing_required_
+// tool/schema_failure) — correctness_failure has no matching count field,
+// but its reasons are still present in `hard_gate_reasons`, so it still
+// needs its own row here or those failures silently disappear from the
+// page even though they're real hard-gate blockers.
+const HARD_GATE_ROWS: { category: string; label: string }[] = [
+  { category: "safety_flag", label: "Safety" },
+  { category: "forbidden_tool_called", label: "Forbidden tool calls" },
+  { category: "missing_required_tool_call", label: "Missing required tools" },
+  { category: "schema_failure", label: "Schema failures" },
+  { category: "correctness_failure", label: "Correctness failures" },
+];
 
 function HardGateReasonRow({ reason, caseName }: { reason: HardGateReasonRead; caseName: string }) {
   return (
-    <li className="rounded-md bg-surface px-2.5 py-2 text-xs">
+    <li className="rounded-control bg-surface px-2.5 py-2 text-xs">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-medium text-ink">{caseName}</span>
-        <Badge tone="danger">{reason.category}</Badge>
+        <span className="font-mono text-[11px] text-ink-3">{reason.check_type}</span>
       </div>
-      <p className="mt-1 font-mono text-[11px] text-ink-3">{reason.check_type}</p>
       <p className="mt-0.5 whitespace-pre-wrap text-ink-2">{reason.detail}</p>
     </li>
+  );
+}
+
+/** One hard-gate row — a plain PASS row when the category has zero
+ * reasons, an expandable FAIL row (real failing cases, not a count
+ * alone) when it doesn't. */
+function HardGateRow({
+  label,
+  reasons,
+  caseNameById,
+}: {
+  label: string;
+  reasons: HardGateReasonRead[];
+  caseNameById: Map<string, string>;
+}) {
+  const count = reasons.length;
+  if (count === 0) {
+    return (
+      <div className="flex items-center justify-between gap-2 px-4 py-3">
+        <span className="flex items-center gap-2 text-sm text-ink">
+          <StatusBadge status="PASS" />
+          {label}
+        </span>
+        <span className="text-xs text-ink-3 tabular-nums">0 cases</span>
+      </div>
+    );
+  }
+  return (
+    <Disclosure
+      variant="row"
+      summary={
+        <span className="flex items-center gap-2 text-sm text-ink">
+          <StatusBadge status="FAIL" />
+          {label}
+        </span>
+      }
+      meta={<span className="tabular-nums text-xs text-ink-3">{count} case{count === 1 ? "" : "s"}</span>}
+    >
+      <ul className="flex flex-col gap-1.5">
+        {reasons.map((reason, i) => (
+          <HardGateReasonRow key={i} reason={reason} caseName={caseNameById.get(reason.test_case_id) ?? reason.test_case_id} />
+        ))}
+      </ul>
+    </Disclosure>
+  );
+}
+
+function SoftStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between border-b border-line py-2 text-sm last:border-b-0">
+      <dt className="text-ink-3">{label}</dt>
+      <dd className="font-medium text-ink tabular-nums">{value}</dd>
+    </div>
   );
 }
 
@@ -53,6 +123,21 @@ export default function ReleaseGatePage() {
   const casesQuery = useQuery({
     queryKey: ["test-cases", suiteId],
     queryFn: () => listTestCases(suiteId),
+    enabled: checkedAuth,
+  });
+
+  // Real fields for the verdict band's "candidate vs baseline version"
+  // and "suite run + timestamp" — this page previously showed neither,
+  // since evaluateRelease()'s own response has no agent_version_id.
+  const suiteRunQuery = useQuery({
+    queryKey: ["suite-run", suiteRunId],
+    queryFn: () => getSuiteRun(suiteRunId),
+    enabled: checkedAuth,
+  });
+
+  const versionsQuery = useQuery({
+    queryKey: ["agent-versions", agentId],
+    queryFn: () => listAgentVersions(agentId),
     enabled: checkedAuth,
   });
 
@@ -83,11 +168,24 @@ export default function ReleaseGatePage() {
   const releaseApproval = approvalsQuery.data?.find(
     (a) => a.node === "release_decision" && a.suite_run_id === suiteRunId,
   );
+  const releaseApprovalStatus: StatusKey | null = releaseApproval
+    ? ({ pending: "PENDING", approved: "APPROVED", rejected: "REJECTED" } as const)[releaseApproval.status]
+    : null;
+
+  const candidateVersion = versionsQuery.data?.find((v) => v.id === suiteRunQuery.data?.agent_version_id);
+  const baselineVersion = versionsQuery.data?.find((v) => v.is_baseline);
+  const hasDistinctBaseline = baselineVersion && baselineVersion.id !== candidateVersion?.id;
+
+  const statusKey: StatusKey | null = release ? (release.decision === "pass" ? "PASS" : "HOLD") : null;
+  const statusMeta = statusKey ? STATUS_META[statusKey] : null;
+
+  const regressionHref = `/agents/${agentId}/test-suites/${suiteId}/runs/${suiteRunId}/regression`;
+  const suiteRunHref = `/agents/${agentId}/test-suites/${suiteId}/runs/${suiteRunId}`;
 
   const breadcrumb = (
     <div className="min-w-0">
       <Link
-        href={`/agents/${agentId}/test-suites/${suiteId}/runs/${suiteRunId}`}
+        href={suiteRunHref}
         className="inline-flex items-center gap-1 text-xs font-medium text-ink-3 no-underline hover:text-ink"
       >
         <ChevronLeftIcon />
@@ -100,8 +198,8 @@ export default function ReleaseGatePage() {
   return (
     <AppShell onLogout={handleLogout} breadcrumb={breadcrumb}>
       <div className="animate-fade-in-up mx-auto w-full max-w-3xl px-4 py-7 md:px-8">
-        <h1 className="text-3xl font-bold tracking-tight text-ink">Release review</h1>
-        <p className="mt-1.5 text-sm text-ink-2">
+        <h1 className="text-page-title">Release review</h1>
+        <p className="mt-1.5 text-body">
           Evaluates this SuiteRun&apos;s deterministic hard gate and soft score. Nothing here is
           computed in the browser — this runs the backend&apos;s release gate and shows its response
           exactly.
@@ -113,7 +211,7 @@ export default function ReleaseGatePage() {
               {releaseMutation.isPending ? "Evaluating…" : "Run release gate evaluation"}
             </Button>
             {releaseMutation.isError && (
-              <p className="mt-3 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
+              <p className="mt-3 rounded-control bg-danger-soft px-3 py-2 text-sm text-danger">
                 {releaseMutation.error instanceof ApiError
                   ? releaseMutation.error.message
                   : "Could not evaluate the release gate."}
@@ -122,56 +220,60 @@ export default function ReleaseGatePage() {
           </div>
         )}
 
-        {release && (
+        {release && statusMeta && (
           <>
-            {/* Three real, distinct outcomes — not two: "pass" is always
-                success, but a "hold" means something different depending
-                on *why*. A hard-gate failure (safety/forbidden-tool/
-                missing-tool/schema) is a deterministic block, shown as
-                danger; a hold driven purely by the soft score (hard gate
-                itself passed) is a softer "needs review" signal, shown as
-                warning — using hard_gate_passed, a field this page
-                already fetches and displays below, not a new one. Uses
-                the shared VerdictBanner — the same "one loud moment"
-                treatment as Suite Run and Result detail, not a
-                page-local pill. */}
-            <p className="mt-6 text-xs font-semibold tracking-wide text-ink-3 uppercase">
-              Can this version be released?
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              <VerdictBanner
-                className="flex-1"
-                tone={release.decision === "pass" ? "success" : release.hard_gate_passed ? "warning" : "danger"}
-                icon={
-                  release.decision === "pass" ? (
-                    <CheckIcon />
-                  ) : release.hard_gate_passed ? (
-                    <WarningIcon />
-                  ) : (
-                    <CloseIcon />
-                  )
-                }
-                headline={
-                  release.decision === "pass"
-                    ? "PASS — ready to release"
-                    : release.hard_gate_passed
-                      ? "HOLD — soft score below threshold"
-                      : "HOLD — hard gate failed"
-                }
-                reason={release.reason}
-              />
-              <Button
-                variant="tertiary"
-                size="sm"
-                onClick={() => releaseMutation.mutate()}
-                disabled={releaseMutation.isPending}
-              >
-                {releaseMutation.isPending ? "Re-evaluating…" : "Re-evaluate"}
-              </Button>
+            {/* Verdict band — the one place in the app besides the Home
+                hero that uses the serif display face, per the design
+                brief: this is the single most important decision on the
+                page, so it gets the app's one other headline moment. */}
+            <div className={`animate-fade-in mt-6 rounded-surface px-5 py-5 ${statusMeta.tone === "success" ? "bg-success-soft" : "bg-danger-soft"}`}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <statusMeta.icon className={statusMeta.tone === "success" ? "text-success" : "text-danger"} />
+                  <h2
+                    className={`font-serif text-3xl ${statusMeta.tone === "success" ? "text-success" : "text-danger"}`}
+                  >
+                    {statusMeta.label}
+                  </h2>
+                </div>
+                <Button
+                  variant="tertiary"
+                  size="sm"
+                  onClick={() => releaseMutation.mutate()}
+                  disabled={releaseMutation.isPending}
+                >
+                  {releaseMutation.isPending ? "Re-evaluating…" : "Re-evaluate"}
+                </Button>
+              </div>
+              <p className={`mt-2 text-sm ${statusMeta.tone === "success" ? "text-success" : "text-danger"}`}>
+                {release.reason}
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-current/15 pt-3 text-xs">
+                <span className="flex items-center gap-1.5 text-ink-2">
+                  Version
+                  <code className="font-mono text-ink">{candidateVersion?.label ?? suiteRunQuery.data?.agent_version_id ?? "—"}</code>
+                  {candidateVersion?.is_baseline && <Badge tone="accent">baseline</Badge>}
+                </span>
+                {hasDistinctBaseline && (
+                  <span className="flex items-center gap-1.5 text-ink-2">
+                    Baseline
+                    <code className="font-mono text-ink">{baselineVersion!.label}</code>
+                  </span>
+                )}
+                <span className="flex items-center gap-1.5 text-ink-2">
+                  Suite run
+                  <Link href={suiteRunHref} className="font-mono text-accent hover:underline">
+                    {suiteRunId}
+                  </Link>
+                </span>
+                <span className="text-ink-2">
+                  {formatTimestamp(suiteRunQuery.data?.completed_at ?? suiteRunQuery.data?.created_at)}
+                </span>
+              </div>
             </div>
 
             {release.approval_required && (
-              <div className="mt-3 rounded-md bg-warning-soft px-3 py-2 text-sm text-warning">
+              <div className="mt-3 rounded-control bg-accent-soft px-3 py-2 text-sm text-accent">
                 <p className="flex flex-wrap items-center gap-1.5">
                   <WarningIcon />
                   Human approval is required before this SuiteRun is actually released.{" "}
@@ -181,98 +283,67 @@ export default function ReleaseGatePage() {
                   .
                 </p>
                 {approvalsQuery.isLoading && <p className="mt-1.5 text-xs">Checking approval status…</p>}
-                {releaseApproval && (
+                {releaseApprovalStatus && (
                   <p className="mt-1.5 flex items-center gap-1.5 text-xs">
                     Current status:
-                    <Badge tone={APPROVAL_STATUS_TONE[releaseApproval.status]}>{releaseApproval.status}</Badge>
+                    <StatusBadge status={releaseApprovalStatus} />
                   </p>
                 )}
               </div>
             )}
 
-            {/* Two structurally separate zones, not two sequential
-                sections that happen to have headers: a hard-gate failure
-                is a deterministic block, a soft signal never is — §30's
-                own requirement that it be "structurally impossible" to
-                read a soft signal (latency, score) as blocking. The
-                left-edge accent bar and independent Card surface are
-                what make the split read as two zones, not just two
-                headings on one page. */}
-            <div className="mt-7 overflow-hidden rounded-lg border border-line">
-              <div className="relative border-b border-line bg-danger-soft/40 px-4 py-3">
-                <span className="absolute top-0 left-0 h-full w-1 bg-danger" aria-hidden="true" />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold tracking-wide text-ink uppercase">Hard gates</p>
-                    <p className="mt-0.5 text-xs text-ink-3">Deterministic — any failure blocks release.</p>
-                  </div>
-                  <Badge tone={release.hard_gate_passed ? "success" : "danger"}>
-                    {release.hard_gate_passed ? "passed" : "failed"}
-                  </Badge>
-                </div>
+            {/* Hard gates — deterministic, dividers not cards; each row
+                expands to the real failing cases, never just a count. */}
+            <div className="mt-7 overflow-hidden rounded-surface border border-line">
+              <div className="border-b border-line bg-surface-2 px-4 py-3">
+                <p className="text-section-title">Hard gates</p>
+                <p className="mt-0.5 text-body-muted">Deterministic — any failure blocks release.</p>
               </div>
-              <div className="px-4 py-4">
-                {release.hard_gate_reasons.length === 0 ? (
-                  <p className="text-xs text-ink-3">No hard-gate failures.</p>
-                ) : (
-                  <ul className="flex flex-col gap-1.5">
-                    {release.hard_gate_reasons.map((reason, i) => (
-                      <HardGateReasonRow
-                        key={i}
-                        reason={reason}
-                        caseName={caseNameById.get(reason.test_case_id) ?? reason.test_case_id}
-                      />
-                    ))}
-                  </ul>
-                )}
-
-                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <MetricCard label="Safety flags" value={String(release.safety_flag_count)} tone={release.safety_flag_count > 0 ? "danger" : "neutral"} />
-                  <MetricCard label="Forbidden tool calls" value={String(release.forbidden_tool_count)} tone={release.forbidden_tool_count > 0 ? "danger" : "neutral"} />
-                  <MetricCard label="Missing required tools" value={String(release.missing_required_tool_count)} tone={release.missing_required_tool_count > 0 ? "danger" : "neutral"} />
-                  <MetricCard label="Schema failures" value={String(release.schema_failure_count)} tone={release.schema_failure_count > 0 ? "danger" : "neutral"} />
-                </div>
+              <div className="flex flex-col divide-y divide-line">
+                {HARD_GATE_ROWS.map((row) => (
+                  <HardGateRow
+                    key={row.category}
+                    label={row.label}
+                    reasons={release.hard_gate_reasons.filter((r) => r.category === row.category)}
+                    caseNameById={caseNameById}
+                  />
+                ))}
               </div>
             </div>
 
-            <div className="mt-5 overflow-hidden rounded-lg border border-line">
-              <div className="relative border-b border-line bg-surface-2 px-4 py-3">
-                <span className="absolute top-0 left-0 h-full w-1 bg-line-strong" aria-hidden="true" />
-                <p className="text-xs font-semibold tracking-wide text-ink uppercase">Soft signals</p>
-                <p className="mt-0.5 text-xs text-ink-3">
-                  Score-based — informs the decision, never blocks it on its own.
+            {/* Soft signals — visibly quieter (no colored band, no
+                dividers-with-icons treatment), explicitly labeled
+                advisory so a reader can never mistake it for a gate. */}
+            <div className="mt-5 rounded-surface border border-line">
+              <div className="border-b border-line px-4 py-3">
+                <p className="text-section-title">Soft signals</p>
+                <p className="mt-0.5 text-body-muted">
+                  Score-based — informs the decision, does not block release on its own.
                 </p>
               </div>
               <div className="px-4 py-4">
-                <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Case counts</p>
-                <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  <MetricCard label="Total" value={String(release.total_cases)} />
-                  <MetricCard label="Pass" value={String(release.pass_count)} tone="success" />
-                  <MetricCard label="Fail" value={String(release.fail_count)} tone="danger" />
-                  <MetricCard label="Inconclusive" value={String(release.inconclusive_count)} tone="warning" />
-                  <MetricCard label="Pass rate" value={formatRate(release.pass_rate)} />
-                  <MetricCard label="Inconclusive rate" value={formatRate(release.inconclusive_rate)} />
-                </div>
+                <dl className="flex flex-col">
+                  <SoftStat label="Total cases" value={String(release.total_cases)} />
+                  <SoftStat label="Pass rate" value={formatRate(release.pass_rate)} />
+                  <SoftStat label="Inconclusive rate" value={formatRate(release.inconclusive_rate)} />
+                  <SoftStat label="Soft score" value={release.soft_score.toFixed(2)} />
+                </dl>
 
-                <p className="mt-5 text-xs font-semibold tracking-wide text-ink-3 uppercase">Soft score</p>
-                <Card className="mt-2" elevation="raised">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-ink">Score</span>
-                    <span className="text-2xl font-bold tracking-tight text-ink">{release.soft_score.toFixed(2)}</span>
-                  </div>
-                  {Object.keys(release.soft_score_components).length > 0 && (
-                    <dl className="mt-3 flex flex-col gap-1 border-t border-line pt-3 text-xs">
+                {Object.keys(release.soft_score_components).length > 0 && (
+                  <Card className="mt-3" elevation="flat">
+                    <p className="text-metric-label">Score components</p>
+                    <dl className="mt-2 flex flex-col gap-1 text-xs">
                       {Object.entries(release.soft_score_components).map(([key, value]) => (
                         <div key={key} className="flex items-center justify-between">
                           <dt className="text-ink-3">{key}</dt>
-                          <dd className="font-mono text-ink-2">{value.toFixed(3)}</dd>
+                          <dd className="font-mono text-ink-2 tabular-nums">{value.toFixed(3)}</dd>
                         </div>
                       ))}
                     </dl>
-                  )}
-                </Card>
+                  </Card>
+                )}
 
-                <p className="mt-3 text-xs text-ink-3">
+                <p className="mt-3 text-body-muted">
                   {release.regression.available ? (
                     <>
                       Regression input: {release.regression.regression_count} regression
@@ -283,7 +354,7 @@ export default function ReleaseGatePage() {
                         `, pass rate delta ${release.regression.pass_rate_delta >= 0 ? "+" : ""}${Math.round(
                           release.regression.pass_rate_delta * 100,
                         )}%`}
-                      .
+                      . <Link href={regressionHref} className="text-accent hover:underline">View regression comparison</Link>
                     </>
                   ) : (
                     "No baseline regression comparison was available as a soft-score input."
@@ -291,12 +362,45 @@ export default function ReleaseGatePage() {
                 </p>
 
                 {release.rubric_case_count > 0 && (
-                  <p className="mt-2 rounded-md border border-line bg-surface-2 px-3 py-2 text-xs text-ink-2">
+                  <p className="mt-2 rounded-control border border-line bg-surface-2 px-3 py-2 text-body-muted">
                     {release.rubric_case_count} rubric (subjective) case{release.rubric_case_count === 1 ? "" : "s"} —
                     excluded from the hard gate.
                   </p>
                 )}
               </div>
+            </div>
+
+            {/* Audit trail — every input this decision was reconstructed
+                from, so it's traceable after the fact. */}
+            <div className="mt-5">
+              <p className="text-section-title">Audit trail</p>
+              <ul className="mt-2 flex flex-col gap-1.5 text-sm text-ink-2">
+                <li>
+                  Suite run <Link href={suiteRunHref} className="font-mono text-accent hover:underline">{suiteRunId}</Link>
+                  {" "}— {release.total_cases} case{release.total_cases === 1 ? "" : "s"} evaluated.
+                </li>
+                <li>
+                  Regression comparison —{" "}
+                  {release.regression.available ? (
+                    <Link href={regressionHref} className="text-accent hover:underline">view comparison</Link>
+                  ) : (
+                    <span className="text-ink-3">not available for this run</span>
+                  )}
+                  .
+                </li>
+                <li>
+                  Release approval —{" "}
+                  {release.approval_required ? (
+                    <>
+                      <Link href="/approvals" className="text-accent hover:underline">Approvals queue</Link>
+                      {releaseApprovalStatus && <> (<StatusBadge status={releaseApprovalStatus} />)</>}
+                    </>
+                  ) : (
+                    <span className="text-ink-3">not required for a HOLD decision</span>
+                  )}
+                  .
+                </li>
+              </ul>
             </div>
           </>
         )}

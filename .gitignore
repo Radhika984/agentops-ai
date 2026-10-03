@@ -25,3 +25,6 @@ next-env.d.ts
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code local session state (machine-local, not project source)
+.claude/
